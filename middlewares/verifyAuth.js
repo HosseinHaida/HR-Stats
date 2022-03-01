@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const dotenv = require('dotenv');
 const { errorMessage, status } = require('../helpers/status.js');
+const { errMessages } = require('../helpers/error-messages.js');
 
 dotenv.config();
 
@@ -28,7 +29,7 @@ const verifyToken = async (req, res, next) => {
     };
     next();
   } catch (error) {
-    errorMessage.error = 'Authentication Failed';
+    errorMessage.error = errMessages.authFailed;
     return res.status(status.unauthorized).send(errorMessage);
   }
 };

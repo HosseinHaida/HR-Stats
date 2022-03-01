@@ -34,6 +34,20 @@ const siginUser = async (req, res) => {
   try {
     // Find user in DB
     const thisUser = await fetchThisUser(userID, res);
+    // Fetch user permissions
+    const thisUserPermissions = await fetchThisUserPermissions(userID);
+
+    let permissions = {
+      permittedDepartments: [],
+    };
+    thisUserPermissions.forEach((loopPermission) => {
+      permissions.permittedDepartments.push({
+        label: loopPermission.Label,
+        value: loopPermission.DepartmentID,
+        permissions: loopPermission.Permissions,
+      });
+    });
+
     if (!thisUser) return catchError(errMessages.userNotFound, 'notfound', res);
     // Check if the right password
     if (!comparePassword(thisUser.PasswordHash, password)) {
@@ -53,6 +67,7 @@ const siginUser = async (req, res) => {
     // const userRequestsInbound = await fetchThisUserRequestsInbound(thisUser.id);
 
     successMessage.user = thisUser;
+    successMessage.user.permissions = permissions;
     // successMessage.user.outbound_requests = userRequests;
     // successMessage.user.inbound_requests = userRequestsInbound;
     successMessage.user.token = token;
@@ -74,14 +89,25 @@ const fetchUser = async (req, res) => {
   try {
     // Find user in DB
     const thisUser = await fetchThisUser(id);
-    // const userRequests = await fetchThisUserRequests(user_id);
-    // const userRequestsInbound = await fetchThisUserRequestsInbound(user_id);
-    // Check if no one was found
+    const thisUserPermissions = await fetchThisUserPermissions(id);
+
+    let permissions = {
+      permittedDepartments: [],
+    };
+    thisUserPermissions.forEach((loopPermission) => {
+      permissions.permittedDepartments.push({
+        label: loopPermission.Label,
+        value: loopPermission.DepartmentID,
+        permissions: loopPermission.Permissions,
+      });
+    });
+
     if (!thisUser) return catchError(errMessages.userNotFound, 'notfound', res);
 
     delete thisUser.PasswordHash;
     // Create user obj with token && send to client
     successMessage.user = thisUser;
+    successMessage.user.permissions = permissions;
     // successMessage.user.outbound_requests = userRequests;
     // successMessage.user.inbound_requests = userRequestsInbound;
     return res.status(status.success).send(successMessage);
@@ -97,10 +123,24 @@ const fetchUser = async (req, res) => {
  */
 const fetchThisUser = async (id, res) => {
   const query = `select * from Users where PerNo = ${id} or NationalID = ${id}`;
-  const connection = await sql.promises.open(process.env.DB_CONNECTION);
+  const connection = await sql.promises.open(process.env.STATS_DB_CONNECTION);
   const data = await connection.promises.query(query);
   await connection.promises.close();
   if (data.results[0].length > 0) return data.results[0][0];
+  else if (data.results[0].length < 1) return null;
+};
+
+/**
+ * Fetch user permissions from DB
+ * @param {integer} id
+ * @returns {object} array of permissions
+ */
+const fetchThisUserPermissions = async (id, res) => {
+  const query = `select * from Auth inner join Departments ON Auth.DepartmentID=Departments.ID where Auth.UserID = ${id}`;
+  const connection = await sql.promises.open(process.env.STATS_DB_CONNECTION);
+  const data = await connection.promises.query(query);
+  await connection.promises.close();
+  if (data.results[0].length > 0) return data.results[0];
   else if (data.results[0].length < 1) return null;
 };
 
