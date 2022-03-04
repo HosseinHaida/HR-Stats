@@ -1,16 +1,18 @@
-const moment = require("moment");
+// const moment = require('moment');
+const xlsxj = require('xlsx-to-json');
+var path = require('path');
 // const readXlsxFile = require('read-excel-file/node');
 const {
   isEmpty,
   //   doArraysContainTheSame,
-} = require("../helpers/validations");
-const { catchError } = require("./catchError");
-const { errMessages } = require("../helpers/error-messages");
-const { successMessage, status } = require("../helpers/status");
-var sql = require("msnodesqlv8");
+} = require('../helpers/validations');
+const { catchError } = require('./catchError');
+const { errMessages } = require('../helpers/error-messages');
+const { successMessage, status } = require('../helpers/status');
+var sql = require('msnodesqlv8');
 
-const multer = require("multer");
-const { upload } = require("./excelUpload");
+const multer = require('multer');
+const { upload } = require('./excelUpload');
 // const { userHasScope } = require("./scopesController");
 
 /**
@@ -24,51 +26,90 @@ const uploadExcel = async (req, res) => {
   const id = NationalID ? NationalID : PerNo;
   try {
     const thisUser = await fetchThisUser(id, res);
-    if (thisUser.Department !== "1")
+    if (thisUser.Department !== '1')
       return catchError(
         errMessages.notAuthorizedToInsertPersonnel,
-        "error",
+        'error',
         res
       );
   } catch (error) {
-    return catchError(errMessages.couldNotFetchUser, "error", res);
+    return catchError(errMessages.couldNotFetchUser, 'error', res);
   }
   // Actually do the upload
   upload(req, res, async (err) => {
     if (err instanceof multer.MulterError) {
-      return catchError(errMessages.uploadFailed, "error", res);
+      return catchError(errMessages.uploadFailed, 'error', res);
     } else if (err) {
-      return catchError(errMessages.errWhileUpload, "error", res);
+      return catchError(errMessages.errWhileUpload, 'error', res);
     }
     // Everything went fine with multer and uploading
     const excelName = req.uploaded_excel_file_name;
     if (!excelName) {
-      return catchError(errMessages.failedSavingExcel, "error", res);
+      return catchError(errMessages.failedSavingExcel, 'error', res);
     }
     try {
-      // Generate photo URL to be saved with user in DB
-      //   const path =
-      //     process.env.SERVER_URL +
-      //     // ':' +
-      //     // process.env.PORT +
-      //     '/static/' +
-      //     process.env.UPLOAD_DIR_EXCEL +
-      //     excelName;
-      //   const updated_at = moment(new Date());
+      const excelPath =
+        process.env.SERVER_URL +
+        ':' +
+        process.env.PORT +
+        '/' +
+        process.env.UPLOAD_DIR_EXCEL +
+        excelName;
 
-      // File path.
-      // readXlsxFile(
-      //   UPLOAD_DIR + UPLOAD_DIR_EXCEL + uploaded_excel_file_name
-      // ).then((rows) => {
-      //   // `rows` is an array of rows
-      //   // each row being an array of cells.
-      //   console.log('rows in excel are: ', rows);
-      // });
+      let query = '';
 
-      //   successMessage.excel_path = path;
+      xlsxj(
+        {
+          input:
+            path.join(__dirname, '../') +
+            process.env.EXCELS_STATIC_PATH +
+            excelName,
+          output:
+            path.join(__dirname, '../') +
+            process.env.EXCELS_STATIC_PATH +
+            excelName +
+            '.json',
+        },
+        function (err, result) {
+          if (err) {
+            console.error(err);
+          } else {
+            // File is turned into a json and
+            // now we are creating a query for DB
+            const columns = [];
+            Object.keys(result[0]).forEach((excelColumnName) => {
+              columns.push(excelColumnName);
+            });
+
+            const columnsInQuery = '(' + columns.join(',') + ')';
+            let rowsInQuery = '';
+
+            // Loop through excel rows and get values
+            result.forEach((excelRow) => {
+              let queryColumnValues = [];
+              Object.values(excelRow).forEach((rowColumnValue) => {
+                queryColumnValues.push(`N'${rowColumnValue}'`);
+              });
+              rowsInQuery += '(' + queryColumnValues.join(',') + '),';
+            });
+
+            rowsInQuery = rowsInQuery.slice(0, -1);
+            query = `INSERT INTO NameList ${columnsInQuery} VALUES ${rowsInQuery}`;
+          }
+        }
+      );
+
+      const connection = await sql.promises.open(
+        process.env.DAST_DB_CONNECTION
+      );
+      await connection.promises.query(query);
+      await connection.promises.close();
+
+      successMessage.excel_path = excelPath;
       return res.status(status.success).send(successMessage);
     } catch (error) {
-      return catchError(errMessages.operationFailed, "error", res);
+      console.log(error);
+      return catchError(errMessages.operationFailed, 'error', res);
     }
   });
 };
@@ -84,40 +125,36 @@ const insertPerson = async (req, res) => {
   const id = NationalID ? NationalID : PerNo;
   try {
     const thisUser = await fetchThisUser(id, res);
-    if (thisUser.Department !== "1")
+    if (thisUser.Department !== '1')
       return catchError(
         errMessages.notAuthorizedToInsertPersonnel,
-        "error",
+        'error',
         res
       );
   } catch (error) {
-    return catchError(errMessages.couldNotFetchUser, "error", res);
+    return catchError(errMessages.couldNotFetchUser, 'error', res);
   }
-  // const { Name, Family, PerNo  userPerNo, NationalID, Rank, Department } = req.body;
+  const { Name, Family, NewPerNo, NewNationalID, Rank, Department } = req.body;
   // const created_at = moment(new Date());
 
   if (
-    (isEmpty(PerNo) && isEmpty(NationalID)) ||
+    (isEmpty(NewPerNo) && isEmpty(NewNationalID)) ||
     isEmpty(Rank) ||
     isEmpty(Department)
   ) {
-    return catchError(errMessages.emptyFields, "bad", res);
+    return catchError(errMessages.emptyFields, 'bad', res);
   }
-  const query = `insert into NameList (Acp_Name, Acp_Fami, PerNo, NID, Rank, Department) values (${Name}, ${Family}, ${PerNo}, ${NationalID}, ${Rank}, ${Department})`;
-  const connection = await sql.promises.open(process.env.STATS_DB_CONNECTION);
-  const data = await connection.promises.query(query);
-  await connection.promises.close();
-  if (data.results[0].length > 0) return data.results[0][0];
-  else if (data.results[0].length < 1) return null;
+
   try {
-    if (!(await userHasScope(user_id, "add_locations"))) {
-      return catchError("You are not authorized to do this!", "bad", res);
-    }
-    // Actually do the update query
-    await insertQuery.insert(columnsToBeInserted);
+    const query = `INSERT INTO NameList (Acp_Name, Acp_Fami, PerNo, NID, Department,ShRank) VALUES (N'${Name}', N'${Family}', '${NewPerNo}', '${NewNationalID}', '${Department}', '${Rank}')`;
+    const connection = await sql.promises.open(process.env.DAST_DB_CONNECTION);
+    await connection.promises.query(query);
+    await connection.promises.close();
+
     return res.status(status.success).send();
   } catch (error) {
-    return catchError("Insert was not successfull", "error", res);
+    console.log(error);
+    return catchError(errMessages.personInsertFailed, 'error', res);
   }
 };
 
@@ -144,24 +181,24 @@ const fetchPeople = async (req, res) => {
 
   try {
     // Query to fetch people from DB
-    let query = `select PerNo as PerNo, ShRank as Rank, Acp_Name as Name, Acp_Fami as Family, NID as NationalID, Yegan as Department from NameList`;
+    let query = `select PerNo as PerNo, ShRank as Rank, Acp_Name as Name, Acp_Fami as Family, NID as NationalID, Department as Department from NameList`;
     // Query for number of people
     let peopleCountQuery = `select count(*) from NameList`;
 
-    if (search_text !== "null" && !isEmpty(search_text)) {
+    if (search_text !== 'null' && !isEmpty(search_text)) {
       const where = (column) => ` ${column} LIKE N'%${search_text}%' or`;
       const whereWithoutOr = (column) => ` ${column} LIKE N'%${search_text}%'`;
-      query += " where";
-      peopleCountQuery += " where";
+      query += ' where';
+      peopleCountQuery += ' where';
       // Change query to fetch users based on search_text
-      query += where("Acp_Name");
-      peopleCountQuery += where("Acp_Name");
-      query += where("Acp_Fami");
-      peopleCountQuery += where("Acp_Fami");
-      query += where("PerNo");
-      peopleCountQuery += where("PerNo");
-      query += whereWithoutOr("NID");
-      peopleCountQuery += whereWithoutOr("NID");
+      query += where('Acp_Name');
+      peopleCountQuery += where('Acp_Name');
+      query += where('Acp_Fami');
+      peopleCountQuery += where('Acp_Fami');
+      query += where('PerNo');
+      peopleCountQuery += where('PerNo');
+      query += whereWithoutOr('NID');
+      peopleCountQuery += whereWithoutOr('NID');
     }
 
     const connection = await sql.promises.open(process.env.DAST_DB_CONNECTION);
@@ -195,11 +232,11 @@ const fetchPeople = async (req, res) => {
     // }
 
     // Calculate number of users and pages
-    const totalCount = Number(dataCount.first[0][""]);
+    const totalCount = Number(dataCount.first[0]['']);
 
     // Actually query the DB for users
     const data = await connection.promises.query(query);
-    query += " order by Acp_Name";
+    query += ' order by Acp_Name';
     const people = data.results[0].length > 0 ? data.results[0] : [];
     await connection.promises.close();
 
@@ -209,7 +246,7 @@ const fetchPeople = async (req, res) => {
     return res.status(status.success).send(successMessage);
   } catch (error) {
     console.log(error);
-    return catchError(errMessages.peopleFetchFailed, "error", res);
+    return catchError(errMessages.peopleFetchFailed, 'error', res);
   }
 };
 
@@ -244,4 +281,5 @@ const fetchThisUserPermissions = async (id, res) => {
 module.exports = {
   uploadExcel,
   fetchPeople,
+  insertPerson,
 };

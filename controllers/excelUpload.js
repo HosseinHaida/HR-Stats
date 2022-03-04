@@ -18,10 +18,10 @@ var storage = multer.diskStorage({
 
 const upload = multer({
   limits: {
-    fileSize: 2000000,
+    fileSize: 2000000000,
   },
   storage,
-}).single('excelFile');
+}).single('excel');
 
 module.exports = {
   upload,

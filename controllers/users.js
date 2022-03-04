@@ -48,6 +48,14 @@ const siginUser = async (req, res) => {
       });
     });
 
+    let departments = [];
+    availDepartments.forEach((loopDepartment) => {
+      departments.push({
+        label: loopDepartment.Label,
+        value: loopDepartment.ID,
+      });
+    });
+
     if (!thisUser) return catchError(errMessages.userNotFound, 'notfound', res);
     // Check if the right password
     if (!comparePassword(thisUser.PasswordHash, password)) {
@@ -63,13 +71,9 @@ const siginUser = async (req, res) => {
 
     delete thisUser.PasswordHash;
     // Create user obj with token && send to client
-    // const userRequests = await fetchThisUserRequests(thisUser.id);
-    // const userRequestsInbound = await fetchThisUserRequestsInbound(thisUser.id);
-
     successMessage.user = thisUser;
     successMessage.user.permissions = permissions;
-    // successMessage.user.outbound_requests = userRequests;
-    // successMessage.user.inbound_requests = userRequestsInbound;
+    successMessage.departments = departments;
     successMessage.user.token = token;
     return res.status(status.success).send(successMessage);
   } catch (error) {
@@ -90,6 +94,7 @@ const fetchUser = async (req, res) => {
     // Find user in DB
     const thisUser = await fetchThisUser(id);
     const thisUserPermissions = await fetchThisUserPermissions(id);
+    const availDepartments = await fetchDepartments();
 
     let permissions = {
       permittedDepartments: [],
@@ -102,14 +107,21 @@ const fetchUser = async (req, res) => {
       });
     });
 
+    let departments = [];
+    availDepartments.forEach((loopDepartment) => {
+      departments.push({
+        label: loopDepartment.Label,
+        value: loopDepartment.ID,
+      });
+    });
+
     if (!thisUser) return catchError(errMessages.userNotFound, 'notfound', res);
 
     delete thisUser.PasswordHash;
     // Create user obj with token && send to client
     successMessage.user = thisUser;
     successMessage.user.permissions = permissions;
-    // successMessage.user.outbound_requests = userRequests;
-    // successMessage.user.inbound_requests = userRequestsInbound;
+    successMessage.departments = departments;
     return res.status(status.success).send(successMessage);
   } catch (error) {
     return catchError(errMessages.operationFailed, 'error', res);
@@ -137,6 +149,20 @@ const fetchThisUser = async (id, res) => {
  */
 const fetchThisUserPermissions = async (id, res) => {
   const query = `select * from Auth inner join Departments ON Auth.DepartmentID=Departments.ID where Auth.UserID = ${id}`;
+  const connection = await sql.promises.open(process.env.STATS_DB_CONNECTION);
+  const data = await connection.promises.query(query);
+  await connection.promises.close();
+  if (data.results[0].length > 0) return data.results[0];
+  else if (data.results[0].length < 1) return null;
+};
+
+/**
+ * Fetch departments from DB
+ * @param {integer} id
+ * @returns {object} array of departments
+ */
+const fetchDepartments = async (res) => {
+  const query = `select * from Departments`;
   const connection = await sql.promises.open(process.env.STATS_DB_CONNECTION);
   const data = await connection.promises.query(query);
   await connection.promises.close();

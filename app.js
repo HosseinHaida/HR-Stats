@@ -11,6 +11,7 @@ var peopleRoute = require('./routes/people');
 const cors = require('cors');
 
 var app = express();
+app.use(express.static(path.join(__dirname, process.env.UPLOAD_DIR)));
 
 app.use(cors());
 
