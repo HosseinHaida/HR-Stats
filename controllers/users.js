@@ -36,6 +36,8 @@ const siginUser = async (req, res) => {
     const thisUser = await fetchThisUser(userID, res);
     // Fetch user permissions
     const thisUserPermissions = await fetchThisUserPermissions(userID);
+    // Fetch all departments
+    const availDepartments = await fetchDepartments();
 
     let permissions = {
       permittedDepartments: [],
@@ -61,6 +63,7 @@ const siginUser = async (req, res) => {
     if (!comparePassword(thisUser.PasswordHash, password)) {
       return catchError(errMessages.invalidPassword, 'bad', res);
     }
+
     // Generate token for user
     const token = generateUserToken(
       thisUser.PerNo,
