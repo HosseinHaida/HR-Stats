@@ -6,11 +6,11 @@ const {
   generateUserToken,
   comparePassword,
   // doArraysContainTheSame,
-} = require("../helpers/validations");
-const { catchError } = require("./catchError");
-const { errMessages } = require("../helpers/error-messages");
-const { successMessage, status } = require("../helpers/status");
-var sql = require("msnodesqlv8");
+} = require('../helpers/validations');
+const { catchError } = require('./catchError');
+const { errMessages } = require('../helpers/error-messages');
+const { successMessage, status } = require('../helpers/status');
+var sql = require('msnodesqlv8');
 
 // const multer = require("multer");
 // const { upload } = require("./usersPhotoUpload");
@@ -26,29 +26,18 @@ const siginUser = async (req, res) => {
   const { userID, password } = req.body;
 
   if (isEmpty(userID) || isEmpty(password)) {
-    return catchError(errMessages.invalidCredentials, "bad", res);
+    return catchError(errMessages.invalidCredentials, 'bad', res);
   }
   if (!validatePassword(password)) {
-    return catchError(errMessages.enterValidPassword, "bad", res);
+    return catchError(errMessages.enterValidPassword, 'bad', res);
   }
   try {
     // Find user in DB
     const thisUser = await fetchThisUser(userID, res);
     // Fetch user permissions
-    const thisUserPermissions = await fetchThisUserRoles(userID);
+    const thisUserRoles = await fetchThisUserRoles(userID);
     // Fetch all departments
     const availDepartments = await fetchDepartments();
-
-    let permissions = {
-      permittedDepartments: [],
-    };
-    thisUserPermissions.forEach((loopPermission) => {
-      permissions.permittedDepartments.push({
-        label: loopPermission.Label,
-        value: loopPermission.DepartmentID,
-        role: loopPermission.Role,
-      });
-    });
 
     let departments = [];
     availDepartments.forEach((loopDepartment) => {
@@ -58,10 +47,26 @@ const siginUser = async (req, res) => {
       });
     });
 
-    if (!thisUser) return catchError(errMessages.userNotFound, "notfound", res);
+    let permissions = {
+      permittedDepartments: [],
+    };
+
+    if (thisUser.Department !== process.env.HR_DEPARTMENT_ID) {
+      thisUserRoles.forEach((loopPermission) => {
+        permissions.permittedDepartments.push({
+          label: loopPermission.Label,
+          value: loopPermission.DepartmentID,
+          role: loopPermission.Role,
+        });
+      });
+    } else {
+      permissions.permittedDepartments = departments;
+    }
+
+    if (!thisUser) return catchError(errMessages.userNotFound, 'notfound', res);
     // Check if the right password
     if (!comparePassword(thisUser.PasswordHash, password)) {
-      return catchError(errMessages.invalidPassword, "bad", res);
+      return catchError(errMessages.invalidPassword, 'bad', res);
     }
 
     // Generate token for user
@@ -80,7 +85,7 @@ const siginUser = async (req, res) => {
     successMessage.user.token = token;
     return res.status(status.success).send(successMessage);
   } catch (error) {
-    return catchError(errMessages.couldNotFetchUser, "error", res);
+    return catchError(errMessages.couldNotFetchUser, 'error', res);
   }
 };
 
@@ -96,19 +101,8 @@ const fetchUser = async (req, res) => {
   try {
     // Find user in DB
     const thisUser = await fetchThisUser(id);
-    const thisUserPermissions = await fetchThisUserRoles(id);
+    const thisUserRoles = await fetchThisUserRoles(id);
     const availDepartments = await fetchDepartments();
-
-    let permissions = {
-      permittedDepartments: [],
-    };
-    thisUserPermissions.forEach((loopPermission) => {
-      permissions.permittedDepartments.push({
-        label: loopPermission.Label,
-        value: loopPermission.DepartmentID,
-        role: loopPermission.Role,
-      });
-    });
 
     let departments = [];
     availDepartments.forEach((loopDepartment) => {
@@ -118,7 +112,23 @@ const fetchUser = async (req, res) => {
       });
     });
 
-    if (!thisUser) return catchError(errMessages.userNotFound, "notfound", res);
+    let permissions = {
+      permittedDepartments: [],
+    };
+
+    if (thisUser.Department !== process.env.HR_DEPARTMENT_ID) {
+      thisUserRoles.forEach((loopPermission) => {
+        permissions.permittedDepartments.push({
+          label: loopPermission.Label,
+          value: loopPermission.DepartmentID,
+          role: loopPermission.Role,
+        });
+      });
+    } else {
+      permissions.permittedDepartments = departments;
+    }
+
+    if (!thisUser) return catchError(errMessages.userNotFound, 'notfound', res);
 
     delete thisUser.PasswordHash;
     // Create user obj with token && send to client
@@ -127,7 +137,7 @@ const fetchUser = async (req, res) => {
     successMessage.departments = departments;
     return res.status(status.success).send(successMessage);
   } catch (error) {
-    return catchError(errMessages.operationFailed, "error", res);
+    return catchError(errMessages.operationFailed, 'error', res);
   }
 };
 
@@ -142,10 +152,10 @@ const insertUser = async (req, res) => {
   const id = PerNo ? PerNo : NationalID;
   try {
     const thisUser = await fetchThisUser(id, res);
-    if (thisUser.Department !== "23")
-      return catchError(errMessages.notAuthorizedToInsertUser, "error", res);
+    if (thisUser.Department !== process.env.HR_DEPARTMENT_ID)
+      return catchError(errMessages.notAuthorizedToInsertUser, 'error', res);
   } catch (error) {
-    return catchError(errMessages.couldNotFetchUser, "error", res);
+    return catchError(errMessages.couldNotFetchUser, 'error', res);
   }
   const {
     isSoldier,
@@ -168,15 +178,15 @@ const insertUser = async (req, res) => {
     isEmpty(Password) ||
     isEmpty(Role)
   ) {
-    return catchError(errMessages.emptyFields, "bad", res);
+    return catchError(errMessages.emptyFields, 'bad', res);
   }
 
   // If User isSoldier make NID his PerNo
-  let userPerNo = "";
+  let userPerNo = '';
   if (isSoldier) userPerNo = NewNationalID;
   else userPerNo = NewPerNo;
 
-  let PersonIsSoldier = isSoldier ? "1" : "0";
+  let PersonIsSoldier = isSoldier ? '1' : '0';
 
   const password_hash = hashString(Password);
 
@@ -191,9 +201,9 @@ const insertUser = async (req, res) => {
     return res.status(status.success).send();
   } catch (error) {
     if (error.code === 2627)
-      return catchError(errMessages.userPerNoDubplicate, "bad", res);
+      return catchError(errMessages.userPerNoDubplicate, 'bad', res);
     console.log(error);
-    return catchError(errMessages.userInsertFailed, "error", res);
+    return catchError(errMessages.userInsertFailed, 'error', res);
   }
 };
 
@@ -209,33 +219,33 @@ const deleteAuth = async (req, res) => {
   const { user_id, department_id, role } = req.params;
 
   if (isEmpty(user_id) || isEmpty(department_id) || isEmpty(role)) {
-    return catchError(errMessages.emptyFieldsDetected, "bad", res);
+    return catchError(errMessages.emptyFieldsDetected, 'bad', res);
   }
   try {
     const thisUser = await fetchThisUser(id);
     if (!thisUser)
-      return catchError(errMessages.couldNotFetchUser, "error", res);
+      return catchError(errMessages.couldNotFetchUser, 'error', res);
 
     // Check if user has permission to delete Auth
-    if (thisUser.Department !== "23") {
+    if (thisUser.Department !== process.env.HR_DEPARTMENT_ID) {
       const rolesInThisDep = await fetchUserAuthInDepartment(id, department_id);
 
       if (!rolesInThisDep)
-        return catchError(errMessages.permissionDeniedOnAuthDelete, "bad", res);
+        return catchError(errMessages.permissionDeniedOnAuthDelete, 'bad', res);
 
       let userRoles = [];
       rolesInThisDep.forEach((role) => {
         userRoles.push(role.Role);
       });
 
-      console.log("user roles in dep " + department_id + " are " + userRoles);
+      console.log('user roles in dep ' + department_id + ' are ' + userRoles);
 
       if (
-        userRoles.indexOf("can_do_all") === -1 &&
-        userRoles.indexOf("head") === -1 &&
-        userRoles.indexOf("succ") === -1
+        userRoles.indexOf('can_do_all') === -1 &&
+        userRoles.indexOf('head') === -1 &&
+        userRoles.indexOf('succ') === -1
       ) {
-        return catchError(errMessages.permissionDeniedOnAuthDelete, "bad", res);
+        return catchError(errMessages.permissionDeniedOnAuthDelete, 'bad', res);
       }
     }
 
@@ -250,14 +260,14 @@ const deleteAuth = async (req, res) => {
       let usrRlesCntQ = `select count(*) from Auth where UserID=${user_id}`;
       const userRolesCount = await connection.promises.query(usrRlesCntQ);
       // Delete the user if there are no roles for him anymore
-      if (Number(userRolesCount.first[0][""]) < 1) {
+      if (Number(userRolesCount.first[0]['']) < 1) {
         const userDeleteQuery = `delete from Users where PerNo='${user_id}'`;
         await connection.promises.query(userDeleteQuery);
       }
       await connection.promises.close();
     } catch (err) {
       console.log(err);
-      return catchError(errMessages.authDeleteFailed, "error", res);
+      return catchError(errMessages.authDeleteFailed, 'error', res);
     }
     // await db("location_comments").where({ id: comment_id }).del();
     // successMessage.message = "Comment deleted";
@@ -265,7 +275,7 @@ const deleteAuth = async (req, res) => {
     await fetchUsers(req, res);
     // return res.status(status.success).send(successMessage);
   } catch (error) {
-    return catchError(errMessages.operationFailed, "error", res);
+    return catchError(errMessages.operationFailed, 'error', res);
   }
 };
 
@@ -293,33 +303,33 @@ const fetchUsers = async (req, res) => {
   try {
     // Query to fetch people from DB
     let query =
-      "select Users.Name, Users.Family, Users.Father, Users.NationalID, Users.Signature, Users.SuccessorSignature, Users.Rank, Users.Department, Users.IsSoldier, Users.PerNo, Auth.Role, Auth.DepartmentID as AuthDepartmentID from Auth inner join Users on Auth.UserID=Users.PerNo";
+      'select Users.Name, Users.Family, Users.Father, Users.NationalID, Users.Signature, Users.SuccessorSignature, Users.Rank, Users.Department, Users.IsSoldier, Users.PerNo, Auth.Role, Auth.DepartmentID as AuthDepartmentID from Auth inner join Users on Auth.UserID=Users.PerNo';
     // Query for number of people
     let usersCountQuery = `select count(*) from Users`;
 
     // Add a where clause to the query if
     // search_text or department mentioned
     if (!isEmpty(search_text) || !isEmpty(department)) {
-      query += " where";
-      usersCountQuery += " where";
+      query += ' where';
+      usersCountQuery += ' where';
     }
 
     if (!isEmpty(search_text)) {
       const where = (column) => ` ${column} LIKE N'%${search_text}%' or`;
       const whereWithoutOr = (column) => ` ${column} LIKE N'%${search_text}%'`;
       // Change query to fetch users based on search_text
-      query += where("Name");
-      usersCountQuery += where("Name");
-      query += where("Family");
-      usersCountQuery += where("Family");
-      query += where("PerNo");
-      usersCountQuery += where("PerNo");
+      query += where('Name');
+      usersCountQuery += where('Name');
+      query += where('Family');
+      usersCountQuery += where('Family');
+      query += where('PerNo');
+      usersCountQuery += where('PerNo');
       query += !isEmpty(department)
-        ? where("NationalID")
-        : whereWithoutOr("NationalID");
+        ? where('NationalID')
+        : whereWithoutOr('NationalID');
       usersCountQuery += !isEmpty(department)
-        ? where("NationalID")
-        : whereWithoutOr("NationalID");
+        ? where('NationalID')
+        : whereWithoutOr('NationalID');
     }
 
     if (!isEmpty(department)) {
@@ -331,7 +341,7 @@ const fetchUsers = async (req, res) => {
     const dataCount = await connection.promises.query(usersCountQuery);
 
     // Calculate number of users and pages
-    const totalCount = Number(dataCount.first[0][""]);
+    const totalCount = Number(dataCount.first[0]['']);
 
     // Actually query the DB for users
     const data = await connection.promises.query(query);
@@ -345,7 +355,7 @@ const fetchUsers = async (req, res) => {
     return res.status(status.success).send(successMessage);
   } catch (error) {
     console.log(error);
-    return catchError(errMessages.peopleFetchFailed, "error", res);
+    return catchError(errMessages.peopleFetchFailed, 'error', res);
   }
 };
 
