@@ -218,6 +218,7 @@ const fetchPeople = async (req, res) => {
       } else {
         query += ` where Department in (${departments})`;
         peopleCountQuery += ` where Department in (${departments})`;
+        queryHasWhere = true;
       }
     } else {
       // Check to close paranthesis on permittedDepartments where clause
@@ -251,6 +252,8 @@ const fetchPeople = async (req, res) => {
       query += whereWithoutOr('NID');
       peopleCountQuery += whereWithoutOr('NID');
     }
+
+    console.log(query);
 
     const connection = await sql.promises.open(process.env.DAST_DB_CONNECTION);
     const dataCount = await connection.promises.query(peopleCountQuery);
