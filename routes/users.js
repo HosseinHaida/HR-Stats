@@ -1,4 +1,4 @@
-const express = require('express');
+const express = require("express");
 
 const {
   // signupUser,
@@ -8,6 +8,7 @@ const {
   // updateUserScopes,
   fetchUser,
   insertUser,
+  deleteAuth,
   // updateUser,
   // handleFriendRequest,
   // fetchInboundRequestsCount,
@@ -16,16 +17,21 @@ const {
   // addToCloseFriends,
   // removeFromCloseFriends,
   // fetchUsersAsOptions,
-} = require('../controllers/users.js');
+} = require("../controllers/users.js");
 
-const verifyAuth = require('../middlewares/verifyAuth.js');
+const verifyAuth = require("../middlewares/verifyAuth.js");
 
 const router = express.Router();
 
 // Routes
-router.post('/users/insert', verifyAuth, insertUser);
-router.post('/auth/signin', siginUser);
-router.get('/auth/fetch', verifyAuth, fetchUser);
+router.post("/users/insert", verifyAuth, insertUser);
+router.post("/auth/signin", siginUser);
+router.get("/auth/fetch", verifyAuth, fetchUser);
+router.delete(
+  "/users/roles/delete/:user_id/:department_id/:role",
+  verifyAuth,
+  deleteAuth
+);
 // router.post('/auth/set_photo', verifyAuth, setPhoto)
 // router.post('/user/scopes', verifyAuth, updateUserScopes)
 // router.post('/auth/update', verifyAuth, updateUser)
@@ -35,7 +41,7 @@ router.get('/auth/fetch', verifyAuth, fetchUser);
 //   verifyAuth,
 //   fetchInboundRequestsCount
 // )
-router.get('/users/list', verifyAuth, fetchUsers);
+router.get("/users/list", verifyAuth, fetchUsers);
 // router.get('/users/list', fetchUsersList)
 // router.get('/users/list/options/:search_text', fetchUsersAsOptions)
 // router.post('/auth/verify', verifyAuth, verifyUser)
