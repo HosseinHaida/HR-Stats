@@ -4,9 +4,10 @@ const {
   // signupUser,
   siginUser,
   // setPhoto,
-  // fetchUsersList,
+  fetchUsers,
   // updateUserScopes,
   fetchUser,
+  insertUser,
   // updateUser,
   // handleFriendRequest,
   // fetchInboundRequestsCount,
@@ -22,7 +23,7 @@ const verifyAuth = require('../middlewares/verifyAuth.js');
 const router = express.Router();
 
 // Routes
-// router.post('/auth/signup', signupUser)
+router.post('/users/insert', verifyAuth, insertUser);
 router.post('/auth/signin', siginUser);
 router.get('/auth/fetch', verifyAuth, fetchUser);
 // router.post('/auth/set_photo', verifyAuth, setPhoto)
@@ -34,7 +35,7 @@ router.get('/auth/fetch', verifyAuth, fetchUser);
 //   verifyAuth,
 //   fetchInboundRequestsCount
 // )
-// router.get('/users/list/:type', verifyAuth, fetchUsersList)
+router.get('/users/list', verifyAuth, fetchUsers);
 // router.get('/users/list', fetchUsersList)
 // router.get('/users/list/options/:search_text', fetchUsersAsOptions)
 // router.post('/auth/verify', verifyAuth, verifyUser)

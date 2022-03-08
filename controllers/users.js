@@ -1,4 +1,4 @@
-const moment = require('moment');
+// const moment = require('moment');
 const {
   hashString,
   validatePassword,
@@ -35,7 +35,7 @@ const siginUser = async (req, res) => {
     // Find user in DB
     const thisUser = await fetchThisUser(userID, res);
     // Fetch user permissions
-    const thisUserPermissions = await fetchThisUserPermissions(userID);
+    const thisUserPermissions = await fetchThisUserRoles(userID);
     // Fetch all departments
     const availDepartments = await fetchDepartments();
 
@@ -96,7 +96,7 @@ const fetchUser = async (req, res) => {
   try {
     // Find user in DB
     const thisUser = await fetchThisUser(id);
-    const thisUserPermissions = await fetchThisUserPermissions(id);
+    const thisUserPermissions = await fetchThisUserRoles(id);
     const availDepartments = await fetchDepartments();
 
     let permissions = {
@@ -132,6 +132,152 @@ const fetchUser = async (req, res) => {
 };
 
 /**
+ * Insert new User
+ * @param {object} req
+ * @param {object} res
+ * @returns {object} return success message
+ */
+const insertUser = async (req, res) => {
+  const { NationalID, PerNo } = req.user;
+  const id = NationalID ? NationalID : PerNo;
+  try {
+    const thisUser = await fetchThisUser(id, res);
+    if (thisUser.Department !== '1')
+      return catchError(errMessages.notAuthorizedToInsertUser, 'error', res);
+  } catch (error) {
+    return catchError(errMessages.couldNotFetchUser, 'error', res);
+  }
+  const {
+    isSoldier,
+    Name,
+    Family,
+    NewPerNo,
+    NewNationalID,
+    Rank,
+    Department,
+    Role,
+    Password,
+  } = req.body;
+  // const created_at = moment(new Date());
+
+  if (
+    (isEmpty(NewPerNo) && !isSoldier) ||
+    isEmpty(NewNationalID) ||
+    isEmpty(Rank) ||
+    isEmpty(Department) ||
+    isEmpty(Password) ||
+    isEmpty(Role)
+  ) {
+    return catchError(errMessages.emptyFields, 'bad', res);
+  }
+
+  // If User isSoldier make NID his PerNo
+  let userPerNo = '';
+  if (isSoldier) userPerNo = NewNationalID;
+  else userPerNo = NewPerNo;
+
+  let PersonIsSoldier = isSoldier ? '1' : '0';
+
+  const password_hash = hashString(Password);
+
+  try {
+    const query = `INSERT INTO Users (Name, Family, PerNo, NationalID, Department, Rank, IsSoldier, PasswordHash) VALUES (N'${Name}', N'${Family}', '${userPerNo}', '${NewNationalID}', '${Department}', '${Rank}', '${PersonIsSoldier}', '${password_hash}')`;
+    const authQuery = `INSERT INTO Auth (UserID, DepartmentID, Role) VALUES (N'${userPerNo}', N'${Department}', '${Role}')`;
+    const connection = await sql.promises.open(process.env.STATS_DB_CONNECTION);
+    await connection.promises.query(query);
+    await connection.promises.query(authQuery);
+    await connection.promises.close();
+
+    return res.status(status.success).send();
+  } catch (error) {
+    if (error.code === 2627)
+      return catchError(errMessages.userPerNoDubplicate, 'bad', res);
+    console.log(error);
+    return catchError(errMessages.userInsertFailed, 'error', res);
+  }
+};
+
+/**
+ * Fetch users list ( + [search] implemented)
+ * @param {object} req
+ * @param {object} res
+ * @returns {object} people array
+ */
+const fetchUsers = async (req, res) => {
+  const { department, search_text } = req.query;
+  const { NationalID, PerNo } = req.user;
+  const userId = NationalID ? NationalID : PerNo;
+
+  //   let userPermissions;
+
+  //   try {
+  //     userPermissions = await fetchThisUserRoles(userId);
+
+  //     console.log('user permissions are: ', userPermissions);
+  //   } catch (error) {
+  //     return catchError(errMessages.userAuthorizationFailed, 'error', res);
+  //   }
+
+  try {
+    // Query to fetch people from DB
+    let query =
+      'select Users.Name, Users.Family, Users.Father, Users.NationalID, Users.Signature, Users.SuccessorSignature, Users.Rank, Users.Department, Users.IsSoldier, Users.PerNo, Auth.Role, Auth.DepartmentID as AuthDepartmentID from Auth inner join Users on Auth.UserID=Users.PerNo';
+    // Query for number of people
+    let usersCountQuery = `select count(*) from Users`;
+
+    // Add a where clause to the query if
+    // search_text or department mentioned
+    if (!isEmpty(search_text) || !isEmpty(department)) {
+      query += ' where';
+      usersCountQuery += ' where';
+    }
+
+    if (!isEmpty(search_text)) {
+      const where = (column) => ` ${column} LIKE N'%${search_text}%' or`;
+      const whereWithoutOr = (column) => ` ${column} LIKE N'%${search_text}%'`;
+      // Change query to fetch users based on search_text
+      query += where('Name');
+      usersCountQuery += where('Name');
+      query += where('Family');
+      usersCountQuery += where('Family');
+      query += where('PerNo');
+      usersCountQuery += where('PerNo');
+      query += !isEmpty(department)
+        ? where('NationalID')
+        : whereWithoutOr('NationalID');
+      usersCountQuery += !isEmpty(department)
+        ? where('NationalID')
+        : whereWithoutOr('NationalID');
+    }
+
+    if (!isEmpty(department)) {
+      query += ` Department = '${department}'`;
+      usersCountQuery += ` Department = '${department}'`;
+    }
+
+    const connection = await sql.promises.open(process.env.STATS_DB_CONNECTION);
+    const dataCount = await connection.promises.query(usersCountQuery);
+
+    // Calculate number of users and pages
+    const totalCount = Number(dataCount.first[0]['']);
+
+    // Actually query the DB for users
+    const data = await connection.promises.query(query);
+    const users = data.results[0].length > 0 ? data.results[0] : [];
+
+    await connection.promises.close();
+
+    // Send response
+    successMessage.users = users;
+    successMessage.total = totalCount;
+    return res.status(status.success).send(successMessage);
+  } catch (error) {
+    console.log(error);
+    return catchError(errMessages.peopleFetchFailed, 'error', res);
+  }
+};
+
+/**
  * Fetch user from DB
  * @param {integer} id
  * @returns {object} user
@@ -150,7 +296,7 @@ const fetchThisUser = async (id, res) => {
  * @param {integer} id
  * @returns {object} array of permissions
  */
-const fetchThisUserPermissions = async (id, res) => {
+const fetchThisUserRoles = async (id, res) => {
   const query = `select * from Auth inner join Departments ON Auth.DepartmentID=Departments.ID where Auth.UserID = ${id}`;
   const connection = await sql.promises.open(process.env.STATS_DB_CONNECTION);
   const data = await connection.promises.query(query);
@@ -176,4 +322,6 @@ const fetchDepartments = async (res) => {
 module.exports = {
   siginUser,
   fetchUser,
+  fetchUsers,
+  insertUser,
 };

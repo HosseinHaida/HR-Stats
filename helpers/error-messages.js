@@ -14,6 +14,11 @@ const errMessages = {
   failedSavingExcel: 'زخیره فایل ناموفق',
   emptyFields: 'لطفا فیلدهای خالی را پر کنید',
   personInsertFailed: 'خطا در ایجاد پرسنل در پایگاه داده',
+  fillSoldiersNID: 'کد ملی وظیفه را وارد نمایید',
+  notAuthorizedToInsertUser: 'شما مجوز افزودن کاربر را ندارید',
+  userInsertFailed: 'خطا در ایجاد کاربر در پایگاه داده',
+  userPerNoDubplicate: 'کد پرسنلی تکراری',
+  personPerNoDubplicate: 'کد پرسنلی تکراری',
 };
 
 module.exports = { errMessages };

@@ -47,7 +47,12 @@ const validatePassword = (password) => {
  * @returns {Boolean} True or False
  */
 const isEmpty = (input) => {
-  if (input === undefined || input === '' || input === null) {
+  if (
+    input === undefined ||
+    input === '' ||
+    input === null ||
+    input === 'null'
+  ) {
     return true;
   } else {
     return false;

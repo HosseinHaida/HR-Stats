@@ -134,25 +134,36 @@ const insertPerson = async (req, res) => {
   } catch (error) {
     return catchError(errMessages.couldNotFetchUser, 'error', res);
   }
-  const { Name, Family, NewPerNo, NewNationalID, Rank, Department } = req.body;
+  const { isSoldier, Name, Family, NewPerNo, NewNationalID, Rank, Department } =
+    req.body;
   // const created_at = moment(new Date());
 
   if (
-    (isEmpty(NewPerNo) && isEmpty(NewNationalID)) ||
+    (isEmpty(NewPerNo) && !isSoldier) ||
+    isEmpty(NewNationalID) ||
     isEmpty(Rank) ||
     isEmpty(Department)
   ) {
     return catchError(errMessages.emptyFields, 'bad', res);
   }
 
+  // If person isSoldier make NID his PerNo
+  let personPerNo = '';
+  if (isSoldier) personPerNo = NewNationalID;
+  else personPerNo = NewPerNo;
+
+  let PersonIsSoldier = isSoldier ? '1' : '0';
+
   try {
-    const query = `INSERT INTO NameList (Acp_Name, Acp_Fami, PerNo, NID, Department,ShRank) VALUES (N'${Name}', N'${Family}', '${NewPerNo}', '${NewNationalID}', '${Department}', '${Rank}')`;
+    const query = `INSERT INTO NameList (Acp_Name, Acp_Fami, PerNo, NID, Department, ShRank, IsSoldier) VALUES (N'${Name}', N'${Family}', '${personPerNo}', '${NewNationalID}', '${Department}', '${Rank}', '${PersonIsSoldier}')`;
     const connection = await sql.promises.open(process.env.DAST_DB_CONNECTION);
     await connection.promises.query(query);
     await connection.promises.close();
 
     return res.status(status.success).send();
   } catch (error) {
+    if (error.code === 2627)
+      return catchError(errMessages.personPerNoDubplicate, 'bad', res);
     console.log(error);
     return catchError(errMessages.personInsertFailed, 'error', res);
   }
@@ -181,7 +192,7 @@ const fetchPeople = async (req, res) => {
 
   try {
     // Query to fetch people from DB
-    let query = `select PerNo as PerNo, ShRank as Rank, Acp_Name as Name, Acp_Fami as Family, NID as NationalID, Department as Department from NameList`;
+    let query = `select PerNo as PerNo, ShRank as Rank, Acp_Name as Name, Acp_Fami as Family, NID as NationalID, Department as Department, IsSoldier as IsSoldier from NameList`;
     // Query for number of people
     let peopleCountQuery = `select count(*) from NameList`;
 
@@ -190,7 +201,7 @@ const fetchPeople = async (req, res) => {
       const whereWithoutOr = (column) => ` ${column} LIKE N'%${search_text}%'`;
       query += ' where';
       peopleCountQuery += ' where';
-      // Change query to fetch users based on search_text
+      // Change query to fetch people based on search_text
       query += where('Acp_Name');
       peopleCountQuery += where('Acp_Name');
       query += where('Acp_Fami');
@@ -204,39 +215,11 @@ const fetchPeople = async (req, res) => {
     const connection = await sql.promises.open(process.env.DAST_DB_CONNECTION);
     const dataCount = await connection.promises.query(peopleCountQuery);
 
-    // If type of users is set to 'friends'
-    // if (type === 'friends') {
-    //   const { user_id } = req.user;
-    //   const user = await db
-    //     .select('friends')
-    //     .from('users')
-    //     .where({ id: user_id })
-    //     .first();
-    //   query.whereIn('id', user.friends);
-    // }
-    // If type of users is set to 'close'
-    // if (type === 'close') {
-    //   const { user_id } = req.user;
-    //   const user = await db
-    //     .select('close_friends')
-    //     .from('users')
-    //     .where({ id: user_id })
-    //     .first();
-    //   query.whereIn('id', user.close_friends);
-    // }
-    // If type of users is set to 'requests'
-    // if (type === 'requests') {
-    //   const { user_id } = req.user;
-    //   const userInRequests = await fetchThisUserRequestsInbound(user_id);
-    //   query.whereIn('id', userInRequests);
-    // }
-
-    // Calculate number of users and pages
+    // Calculate number of people and pages
     const totalCount = Number(dataCount.first[0]['']);
 
-    // Actually query the DB for users
+    // Actually query the DB for people
     const data = await connection.promises.query(query);
-    query += ' order by Acp_Name';
     const people = data.results[0].length > 0 ? data.results[0] : [];
     await connection.promises.close();
 
