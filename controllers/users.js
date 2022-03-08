@@ -280,7 +280,7 @@ const deleteAuth = async (req, res) => {
 };
 
 /**
- * Fetch users list ( + [search] implemented)
+ * Fetch users list (+ [search])
  * @param {object} req
  * @param {object} res
  * @returns {object} people array
@@ -290,16 +290,6 @@ const fetchUsers = async (req, res) => {
   const { NationalID, PerNo } = req.user;
   const userId = NationalID ? NationalID : PerNo;
 
-  //   let userPermissions;
-
-  //   try {
-  //     userPermissions = await fetchThisUserRoles(userId);
-
-  //     console.log('user permissions are: ', userPermissions);
-  //   } catch (error) {
-  //     return catchError(errMessages.userAuthorizationFailed, 'error', res);
-  //   }
-
   try {
     // Query to fetch people from DB
     let query =
@@ -307,16 +297,14 @@ const fetchUsers = async (req, res) => {
     // Query for number of people
     let usersCountQuery = `select count(*) from Users`;
 
-    // Add a where clause to the query if
-    // search_text or department mentioned
-    if (!isEmpty(search_text) || !isEmpty(department)) {
-      query += ' where';
-      usersCountQuery += ' where';
-    }
+    let queryHasWhere = false;
 
     if (!isEmpty(search_text)) {
+      query += ' where(';
+      usersCountQuery += ' where(';
+      queryHasWhere = true;
       const where = (column) => ` ${column} LIKE N'%${search_text}%' or`;
-      const whereWithoutOr = (column) => ` ${column} LIKE N'%${search_text}%'`;
+      const whereWithoutOr = (column) => ` ${column} LIKE N'%${search_text}%')`;
       // Change query to fetch users based on search_text
       query += where('Name');
       usersCountQuery += where('Name');
@@ -324,17 +312,18 @@ const fetchUsers = async (req, res) => {
       usersCountQuery += where('Family');
       query += where('PerNo');
       usersCountQuery += where('PerNo');
-      query += !isEmpty(department)
-        ? where('NationalID')
-        : whereWithoutOr('NationalID');
-      usersCountQuery += !isEmpty(department)
-        ? where('NationalID')
-        : whereWithoutOr('NationalID');
+      query += whereWithoutOr('NationalID');
+      usersCountQuery += whereWithoutOr('NationalID');
     }
 
     if (!isEmpty(department)) {
-      query += ` Department = '${department}'`;
-      usersCountQuery += ` Department = '${department}'`;
+      if (queryHasWhere) {
+        query += ` and Department = '${department}'`;
+        usersCountQuery += ` and Department = '${department}'`;
+      } else {
+        query += ` where Department = '${department}'`;
+        usersCountQuery += ` where Department = '${department}'`;
+      }
     }
 
     const connection = await sql.promises.open(process.env.STATS_DB_CONNECTION);
