@@ -253,8 +253,6 @@ const fetchPeople = async (req, res) => {
       peopleCountQuery += whereWithoutOr('NID');
     }
 
-    console.log(query);
-
     const connection = await sql.promises.open(process.env.DAST_DB_CONNECTION);
     const dataCount = await connection.promises.query(peopleCountQuery);
 

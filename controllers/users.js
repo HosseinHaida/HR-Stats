@@ -114,16 +114,18 @@ const fetchUser = async (req, res) => {
 
     let permissions = {
       permittedDepartments: [],
+      authedDepartments: [],
     };
 
-    if (thisUser.Department !== process.env.HR_DEPARTMENT_ID) {
-      thisUserRoles.forEach((loopPermission) => {
-        permissions.permittedDepartments.push({
-          label: loopPermission.Label,
-          value: loopPermission.DepartmentID,
-          role: loopPermission.Role,
-        });
+    thisUserRoles.forEach((loopPermission) => {
+      permissions.authedDepartments.push({
+        label: loopPermission.Label,
+        value: loopPermission.DepartmentID,
+        role: loopPermission.Role,
       });
+    });
+    if (thisUser.Department !== process.env.HR_DEPARTMENT_ID) {
+      permissions.permittedDepartments = permissions.authedDepartments;
     } else {
       permissions.permittedDepartments = departments;
     }
@@ -237,8 +239,6 @@ const deleteAuth = async (req, res) => {
       rolesInThisDep.forEach((role) => {
         userRoles.push(role.Role);
       });
-
-      console.log('user roles in dep ' + department_id + ' are ' + userRoles);
 
       if (
         userRoles.indexOf('can_do_all') === -1 &&
