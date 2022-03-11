@@ -34,6 +34,9 @@ const siginUser = async (req, res) => {
   try {
     // Find user in DB
     const thisUser = await fetchThisUser(userID, res);
+
+    if (!thisUser) return catchError(errMessages.userNotFound, 'bad', res);
+
     // Fetch user permissions
     const thisUserRoles = await fetchThisUserRoles(userID);
     // Fetch all departments
@@ -49,16 +52,18 @@ const siginUser = async (req, res) => {
 
     let permissions = {
       permittedDepartments: [],
+      authedDepartments: [],
     };
 
-    if (thisUser.Department !== process.env.HR_DEPARTMENT_ID) {
-      thisUserRoles.forEach((loopPermission) => {
-        permissions.permittedDepartments.push({
-          label: loopPermission.Label,
-          value: loopPermission.DepartmentID,
-          role: loopPermission.Role,
-        });
+    thisUserRoles.forEach((loopPermission) => {
+      permissions.authedDepartments.push({
+        label: loopPermission.Label,
+        value: loopPermission.DepartmentID,
+        role: loopPermission.Role,
       });
+    });
+    if (thisUser.Department !== process.env.HR_DEPARTMENT_ID) {
+      permissions.permittedDepartments = permissions.authedDepartments;
     } else {
       permissions.permittedDepartments = departments;
     }
@@ -85,6 +90,7 @@ const siginUser = async (req, res) => {
     successMessage.user.token = token;
     return res.status(status.success).send(successMessage);
   } catch (error) {
+    console.log(error);
     return catchError(errMessages.couldNotFetchUser, 'error', res);
   }
 };
@@ -101,6 +107,9 @@ const fetchUser = async (req, res) => {
   try {
     // Find user in DB
     const thisUser = await fetchThisUser(id);
+
+    if (!thisUser) return catchError(errMessages.userNotFound, 'bad', res);
+
     const thisUserRoles = await fetchThisUserRoles(id);
     const availDepartments = await fetchDepartments();
 
