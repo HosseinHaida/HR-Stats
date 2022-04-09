@@ -1,5 +1,5 @@
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 
 /**
  * Hash Password Method
@@ -36,7 +36,7 @@ const comparePassword = (hashedPassword, password) => {
  * @returns {Boolean} True or False
  */
 const validatePassword = (password) => {
-  if (password.length <= 8 || password === '') {
+  if (password === "") {
     return false;
   }
   return true;
@@ -49,9 +49,9 @@ const validatePassword = (password) => {
 const isEmpty = (input) => {
   if (
     input === undefined ||
-    input === '' ||
+    input === "" ||
     input === null ||
-    input === 'null'
+    input === "null"
   ) {
     return true;
   } else {
@@ -65,7 +65,7 @@ const isEmpty = (input) => {
  * @returns {Boolean} True or False
  */
 const empty = (input) => {
-  if (input === undefined || input === '') {
+  if (input === undefined || input === "") {
     return true;
   }
 };
@@ -76,7 +76,7 @@ const empty = (input) => {
  * @returns {Boolean} True or False
  */
 const doArraysContainTheSame = (arrayOne, arrayTwo) =>
-  arrayOne.sort().join(',') === arrayTwo.sort().join(',');
+  arrayOne.sort().join(",") === arrayTwo.sort().join(",");
 
 /**
  * Generate Token
@@ -92,7 +92,7 @@ const generateUserToken = (PerNo, Name, Family, NationalID) => {
       NationalID,
     },
     process.env.SECRET,
-    { expiresIn: '14d' }
+    { expiresIn: "14d" }
   );
   return token;
 };
