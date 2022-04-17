@@ -55,6 +55,9 @@ const siginUser = async (req, res) => {
       authedDepartments: [],
     };
 
+    // console.log('salam: ', thisUserRoles);
+    if (!thisUserRoles) catchError(errMessages.noAuthFound, 'notfound', res);
+
     thisUserRoles.forEach((loopPermission) => {
       permissions.authedDepartments.push({
         label: loopPermission.Label,
@@ -90,7 +93,7 @@ const siginUser = async (req, res) => {
     successMessage.user.token = token;
     return res.status(status.success).send(successMessage);
   } catch (error) {
-    console.log(error);
+    console.log('salam: ', error);
     return catchError(errMessages.couldNotFetchUser, 'error', res);
   }
 };
@@ -297,7 +300,7 @@ const deleteAuth = async (req, res) => {
 const fetchUsers = async (req, res) => {
   const { department, search_text } = req.query;
   const { NationalID, PerNo } = req.user;
-  const userId = NationalID ? NationalID : PerNo;
+  const userId = PerNo ? PerNo : NationalID;
 
   try {
     // Query to fetch people from DB

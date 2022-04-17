@@ -6,7 +6,7 @@ var storage = multer.diskStorage({
   },
   filename: function (req, file, cb) {
     const { NationalID, PerNo } = req.user;
-    const userId = NationalID ? NationalID : PerNo;
+    const userId = PerNo ? PerNo : NationalID;
     const fileNameSplitedByDots = file.originalname.split('.');
     const fileFormat = fileNameSplitedByDots[fileNameSplitedByDots.length - 1];
     let weirdName = userId + '_' + Math.floor(Math.random() * 1000000000000000);

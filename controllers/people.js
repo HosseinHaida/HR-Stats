@@ -23,7 +23,7 @@ const { upload } = require("./excelUpload");
  */
 const uploadExcel = async (req, res) => {
   const { NationalID, PerNo } = req.user;
-  const id = NationalID ? NationalID : PerNo;
+  const id = PerNo ? PerNo : NationalID;
   try {
     const thisUser = await fetchThisUser(id, res);
     if (thisUser.Department !== process.env.HR_DEPARTMENT_ID)
@@ -108,8 +108,13 @@ const uploadExcel = async (req, res) => {
       successMessage.excel_path = excelPath;
       return res.status(status.success).send(successMessage);
     } catch (error) {
-      console.log(error);
-      return catchError(errMessages.operationFailed, "error", res);
+      if (error.message)
+        return catchError(
+          error.message.substring(error.message.lastIndexOf("]") + 1),
+          "error",
+          res
+        );
+      else return catchError(errMessages.operationFailed, "error", res);
     }
   });
 };
@@ -122,7 +127,7 @@ const uploadExcel = async (req, res) => {
  */
 const changeDepartment = async (req, res) => {
   const { NationalID, PerNo } = req.user;
-  const id = NationalID ? NationalID : PerNo;
+  const id = PerNo ? PerNo : NationalID;
   const { department, perNo } = req.body;
 
   let thisPerson;
@@ -229,7 +234,7 @@ const changeDepartment = async (req, res) => {
  */
 const insertPerson = async (req, res) => {
   const { NationalID, PerNo } = req.user;
-  const id = NationalID ? NationalID : PerNo;
+  const id = PerNo ? PerNo : NationalID;
   try {
     const thisUser = await fetchThisUser(id, res);
     if (thisUser.Department !== process.env.HR_DEPARTMENT_ID)
@@ -285,7 +290,7 @@ const insertPerson = async (req, res) => {
 const fetchPeople = async (req, res) => {
   const { search_text, departments } = req.query;
   const { NationalID, PerNo } = req.user;
-  const id = NationalID ? NationalID : PerNo;
+  const id = PerNo ? PerNo : NationalID;
 
   const thisUserRoles = await fetchThisUserRoles(id);
   const thisUser = await fetchThisUser(id);
@@ -317,9 +322,10 @@ const fetchPeople = async (req, res) => {
       }
     }
     let parsedDepartments;
-    if (departments) parsedDepartments = departments.split(",").join("','");
+    if (!isEmpty(departments) && departments !== "based_on_auth")
+      parsedDepartments = departments.split(",").join("','");
     // Check if user wants to see personnel in a particular department
-    if (!isEmpty(departments)) {
+    if (!isEmpty(departments) && departments !== "based_on_auth") {
       if (queryHasWhere) {
         query += ` and Department in ('${parsedDepartments}'))`;
         peopleCountQuery += ` and Department in ('${parsedDepartments}'))`;
@@ -328,7 +334,19 @@ const fetchPeople = async (req, res) => {
         peopleCountQuery += ` where Department in ('${parsedDepartments}')`;
         queryHasWhere = true;
       }
-    } else {
+    }
+    if (departments === "based_on_auth") {
+      if (queryHasWhere) {
+        query += ` and Department = '${permittedDepartments[0]}')`;
+        peopleCountQuery += ` and Department = '${permittedDepartments[0]}')`;
+      } else {
+        query += ` where Department = '${permittedDepartments[0]}'`;
+        peopleCountQuery += ` where Department = '${permittedDepartments[0]}'`;
+        queryHasWhere = true;
+      }
+    }
+
+    if (isEmpty(departments)) {
       // Check to close paranthesis on permittedDepartments where clause
       if (queryHasWhere) {
         query += ")";
@@ -372,11 +390,14 @@ const fetchPeople = async (req, res) => {
     const people = data.results[0].length > 0 ? data.results[0] : [];
     await connection.promises.close();
 
+    console.log(people);
+
     // Send response
     successMessage.people = people;
     successMessage.total = totalCount;
     return res.status(status.success).send(successMessage);
   } catch (error) {
+    console.log(error);
     return catchError(errMessages.peopleFetchFailed, "error", res);
   }
 };
