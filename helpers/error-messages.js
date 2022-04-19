@@ -36,6 +36,8 @@ const errMessages = {
   notPermittedToUploadDastoor: 'عدم وجود مجوز برای بارگذاری گروهی ماده دستور',
   notInHR: 'تنها پرسنل نیروی انسانی مجوز این کار را دارند',
   authFetchFailed: 'خطا در واکشی مجوزها',
+  personWithPerNo: 'فرد با شماره پرسنلی ',
+  excelImportFailedAtSomePoint: 'ورود اطلاعات از فایل اکسل با مشکل مواجه شد',
 };
 
 module.exports = { errMessages };

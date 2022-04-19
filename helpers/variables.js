@@ -228,7 +228,7 @@ const maddeHaCols = {
     // Girande3Check: '"",'
     // Girande4Check: '"",'
     'متن نامه': 'ToReport',
-    // "Tarikh": '"",'
+    تاریخ: 'Tarikh',
     'علت تشویق': 'EllateTashvigh',
     'استناد تشویق': 'EstenadTashvigh',
     'کد تشویق': 'CodeTashvigh',

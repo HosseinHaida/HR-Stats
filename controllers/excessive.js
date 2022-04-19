@@ -66,12 +66,8 @@ const uploadDastoorMaddeExcel = async (req, res) => {
         process.env.UPLOAD_DIR_EXCEL +
         excelName;
 
-      let query = '';
-      const connection = await sql.promises.open(
-        process.env.DAST_DB_CONNECTION
-      );
+      let queries = [];
       let columnsInQuery = '';
-      let rowsInQuery = '';
       xlsxj(
         {
           input:
@@ -101,7 +97,6 @@ const uploadDastoorMaddeExcel = async (req, res) => {
             columns.push('Madde');
             columns.push('Eghdamgar');
             columns.push('TarikhSabt');
-            columns.push('Tarikh');
             columns.push('Date');
             columns.push('TaidEghdamgar');
             columns.push('TaidRaisShobe');
@@ -151,6 +146,9 @@ const uploadDastoorMaddeExcel = async (req, res) => {
               EmzaRaisShobeVal;
 
             try {
+              const connection = await sql.promises.open(
+                process.env.DAST_DB_CONNECTION
+              );
               const tblSabetRes = await connection.promises.query(
                 `SELECT * FROM tblSabet`
               );
@@ -160,6 +158,7 @@ const uploadDastoorMaddeExcel = async (req, res) => {
               const userFetchedFromMembers = await connection.promises.query(
                 `SELECT * FROM member WHERE idp = '${id}'`
               );
+              await connection.promises.close();
               if (userFetchedFromMembers.first.length < 1)
                 return catchError(
                   errMessages.couldNotFetchUser,
@@ -216,88 +215,139 @@ const uploadDastoorMaddeExcel = async (req, res) => {
                 res
               );
             }
-            // Loop through excel rows and get values
+            // Fetch people in excel rows from NameList
+            let people = [];
             for (const excelRow of result) {
-              // result.forEach(async (excelRow) => {
-              let queryColumnValues = [];
-              Object.values(excelRow).forEach((rowColumnValue) => {
-                queryColumnValues.push(`N'${rowColumnValue}'`);
-              });
-              // Fetch the person in this row from NameList
-              const thisRowPerson = await connection.promises.query(
-                `SELECT ShRank, Acp_Name, Acp_Fami FROM NameList WHERE PerNo = '${excelRow['شماره پرسنلی']}'`
+              people.push(excelRow['شماره پرسنلی']);
+            }
+            let listOfPerNos = people.join("','");
+            const connection = await sql.promises.open(
+              process.env.DAST_DB_CONNECTION
+            );
+            const namONeshanHaResult = await connection.promises.query(
+              `SELECT ShRank, Acp_Name, Acp_Fami, PerNo FROM NameList WHERE PerNo in ('${listOfPerNos}')`
+            );
+            await connection.promises.close();
+            // Create a map with an index of peoples perNos
+            let namONeshanMap = Object.assign(
+              {},
+              ...namONeshanHaResult.first.map((a) => ({
+                [a['PerNo']]: a,
+              }))
+            );
+
+            const chunkSize = 10;
+            for (let i = 0; i <= result.length; i += chunkSize) {
+              const chunk = result.slice(i, i + chunkSize);
+              let rowsInQuery = '';
+              // Loop through excel rows and get values
+              for (const excelRow of chunk) {
+                let queryColumnValues = [];
+                Object.values(excelRow).forEach((rowColumnValue) => {
+                  queryColumnValues.push(`N'${rowColumnValue}'`);
+                });
+                // const rowPerNo = excelRow['شماره پرسنلی'];
+                const rowPerNo = '254159857';
+                // Assign the NamoNeshan from the namONeshanMap that we created
+                let NamoNeshan =
+                  ranks[namONeshanMap[rowPerNo]['ShRank']] +
+                  ' ' +
+                  namONeshanMap[rowPerNo]['Acp_Name'];
+                ' ' + namONeshanMap[rowPerNo]['Acp_Fami'];
+
+                // Check if there are recievers and set booleans
+                let recieverCheck,
+                  recieverCheck2,
+                  recieverCheck3,
+                  recieverCheck4,
+                  recieverCheck5,
+                  recieverCheck6,
+                  recieverCheck7,
+                  recieverCheck8;
+
+                excelRow['گیرنده۱'] ? (recieverCheck = 1) : (recieverCheck = 0);
+                excelRow['گیرنده۲']
+                  ? (recieverCheck2 = 1)
+                  : (recieverCheck2 = 0);
+                excelRow['گیرنده۳']
+                  ? (recieverCheck3 = 1)
+                  : (recieverCheck3 = 0);
+                excelRow['گیرنده۴']
+                  ? (recieverCheck4 = 1)
+                  : (recieverCheck4 = 0);
+                excelRow['گیرنده۵']
+                  ? (recieverCheck5 = 1)
+                  : (recieverCheck5 = 0);
+                excelRow['گیرنده۶']
+                  ? (recieverCheck6 = 1)
+                  : (recieverCheck6 = 0);
+                excelRow['گیرنده۷']
+                  ? (recieverCheck7 = 1)
+                  : (recieverCheck7 = 0);
+                excelRow['گیرنده۸']
+                  ? (recieverCheck8 = 1)
+                  : (recieverCheck8 = 0);
+
+                queryColumnValues.push(dastoorVal);
+                queryColumnValues.push(`N'${maddeVal}'`);
+                queryColumnValues.push(`N'${eghdamgarVal}'`);
+                queryColumnValues.push(`N'${TarikhSabtVal}'`);
+                queryColumnValues.push(`N'${TarikhSabtVal}'`);
+                queryColumnValues.push(TaidEghdamgarVal);
+                queryColumnValues.push(TaidRaisShobeVal);
+                queryColumnValues.push(TaidJaneshinVal);
+                queryColumnValues.push(TaidRaisVal);
+                queryColumnValues.push(TaidRaisDastoor);
+                queryColumnValues.push(`N'${JaneshinVal}'`);
+                queryColumnValues.push(`N'${RaisVal}'`);
+                queryColumnValues.push(`N'${RaisDastoorVal}'`);
+                queryColumnValues.push(`N'${OnvanShobeVal}'`);
+                queryColumnValues.push(`N'${OnvanShobeVal}'`);
+                queryColumnValues.push(`N'${EmzaEghdamgarVal}'`);
+                queryColumnValues.push(`N'${EmzaRaisShobeVal}'`);
+                queryColumnValues.push(`N'${EmzaJaneshinVal}'`);
+                queryColumnValues.push(`N'${EmzaRaisVal}'`);
+                queryColumnValues.push(`N'${EmzaRaisDastoorVal}'`);
+                queryColumnValues.push(`N'${NamoNeshan}'`);
+                queryColumnValues.push(recieverCheck);
+                queryColumnValues.push(recieverCheck2);
+                queryColumnValues.push(recieverCheck3);
+                queryColumnValues.push(recieverCheck4);
+                queryColumnValues.push(recieverCheck5);
+                queryColumnValues.push(recieverCheck6);
+                queryColumnValues.push(recieverCheck7);
+                queryColumnValues.push(recieverCheck8);
+
+                rowsInQuery += '(' + queryColumnValues.join(',') + '),';
+              }
+
+              // Remove the last comma in query (fixing the syntax)
+              rowsInQuery = rowsInQuery.slice(0, -1);
+
+              queries.push(
+                `INSERT INTO ${maddeHaNumbers[madde].table} ${columnsInQuery} VALUES ${rowsInQuery}`
               );
-              // Assign the NamoNeshan from the previous query res
-              let NamoNeshan =
-                ranks[thisRowPerson.first[0]['ShRank']] +
-                ' ' +
-                thisRowPerson.first[0]['Acp_Name'];
-              ' ' + thisRowPerson.first[0]['Acp_Fami'];
-
-              // Check if there are recievers and set booleans
-              let recieverCheck,
-                recieverCheck2,
-                recieverCheck3,
-                recieverCheck4,
-                recieverCheck5,
-                recieverCheck6,
-                recieverCheck7,
-                recieverCheck8;
-
-              excelRow['گیرنده۱'] ? (recieverCheck = 1) : (recieverCheck = 0);
-              excelRow['گیرنده۲'] ? (recieverCheck2 = 1) : (recieverCheck2 = 0);
-              excelRow['گیرنده۳'] ? (recieverCheck3 = 1) : (recieverCheck3 = 0);
-              excelRow['گیرنده۴'] ? (recieverCheck4 = 1) : (recieverCheck4 = 0);
-              excelRow['گیرنده۵'] ? (recieverCheck5 = 1) : (recieverCheck5 = 0);
-              excelRow['گیرنده۶'] ? (recieverCheck6 = 1) : (recieverCheck6 = 0);
-              excelRow['گیرنده۷'] ? (recieverCheck7 = 1) : (recieverCheck7 = 0);
-              excelRow['گیرنده۸'] ? (recieverCheck8 = 1) : (recieverCheck8 = 0);
-
-              queryColumnValues.push(dastoorVal);
-              queryColumnValues.push(`N'${maddeVal}'`);
-              queryColumnValues.push(`N'${eghdamgarVal}'`);
-              queryColumnValues.push(`N'${TarikhSabtVal}'`);
-              queryColumnValues.push(`N'${TarikhSabtVal}'`);
-              queryColumnValues.push(`N'${TarikhSabtVal}'`);
-              queryColumnValues.push(TaidEghdamgarVal);
-              queryColumnValues.push(TaidRaisShobeVal);
-              queryColumnValues.push(TaidJaneshinVal);
-              queryColumnValues.push(TaidRaisVal);
-              queryColumnValues.push(TaidRaisDastoor);
-              queryColumnValues.push(`N'${JaneshinVal}'`);
-              queryColumnValues.push(`N'${RaisVal}'`);
-              queryColumnValues.push(`N'${RaisDastoorVal}'`);
-              queryColumnValues.push(`N'${OnvanShobeVal}'`);
-              queryColumnValues.push(`N'${OnvanShobeVal}'`);
-              queryColumnValues.push(`N'${EmzaEghdamgarVal}'`);
-              queryColumnValues.push(`N'${EmzaRaisShobeVal}'`);
-              queryColumnValues.push(`N'${EmzaJaneshinVal}'`);
-              queryColumnValues.push(`N'${EmzaRaisVal}'`);
-              queryColumnValues.push(`N'${EmzaRaisDastoorVal}'`);
-              queryColumnValues.push(`N'${NamoNeshan}'`);
-              queryColumnValues.push(recieverCheck);
-              queryColumnValues.push(recieverCheck2);
-              queryColumnValues.push(recieverCheck3);
-              queryColumnValues.push(recieverCheck4);
-              queryColumnValues.push(recieverCheck5);
-              queryColumnValues.push(recieverCheck6);
-              queryColumnValues.push(recieverCheck7);
-              queryColumnValues.push(recieverCheck8);
-
-              rowsInQuery += '(' + queryColumnValues.join(',') + '),';
             }
 
-            // Remove the last comma in query (fixing the syntax)
-            rowsInQuery = rowsInQuery.slice(0, -1);
+            try {
+              // Actually insert rows in splitted chunks
+              for (const query of queries) {
+                const connection = await sql.promises.open(
+                  process.env.DAST_DB_CONNECTION
+                );
+                await connection.promises.query(query);
+                await connection.promises.close();
+              }
 
-            query = `INSERT INTO ${madde} ${columnsInQuery} VALUES ${rowsInQuery}`;
-
-            // Actually insert all the recieved rows
-            await connection.promises.query(query);
-            await connection.promises.close();
-
-            successMessage.excel_path = excelPath;
-            return res.status(status.success).send(successMessage);
+              successMessage.excel_path = excelPath;
+              return res.status(status.success).send(successMessage);
+            } catch (error) {
+              return catchError(
+                errMessages.excelImportFailedAtSomePoint,
+                'error',
+                res
+              );
+            }
           }
         }
       );
