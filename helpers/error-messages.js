@@ -38,6 +38,10 @@ const errMessages = {
   authFetchFailed: 'خطا در واکشی مجوزها',
   personWithPerNo: 'فرد با شماره پرسنلی ',
   excelImportFailedAtSomePoint: 'ورود اطلاعات از فایل اکسل با مشکل مواجه شد',
+  notAuthorized: 'عدم وجود مجوز',
+  youAreNotInTheSameDep: 'شما تنها مجاز به ثبت مرخصی برای افراد قسمت خود هستید',
+  dayOffInsertFailed: 'ثبت مرخصی با خطا مواجه شد',
+  daysOffFetchFailed: 'واکشی مرخصی‌ها با خطا مواجه شد',
 };
 
 module.exports = { errMessages };

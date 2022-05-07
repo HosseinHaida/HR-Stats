@@ -1,18 +1,18 @@
 // const moment = require('moment');
-const xlsxj = require("xlsx-to-json");
-var path = require("path");
+const xlsxj = require('xlsx-to-json');
+var path = require('path');
 // const readXlsxFile = require('read-excel-file/node');
 const {
   isEmpty,
   //   doArraysContainTheSame,
-} = require("../helpers/validations");
-const { catchError } = require("./catchError");
-const { errMessages } = require("../helpers/error-messages");
-const { successMessage, status } = require("../helpers/status");
-var sql = require("msnodesqlv8");
+} = require('../helpers/validations');
+const { catchError } = require('./catchError');
+const { errMessages } = require('../helpers/error-messages');
+const { successMessage, status } = require('../helpers/status');
+var sql = require('msnodesqlv8');
 
-const multer = require("multer");
-const { upload } = require("./excelUpload");
+const multer = require('multer');
+const { upload } = require('./excelUpload');
 // const { userHasScope } = require("./scopesController");
 
 /**
@@ -29,46 +29,46 @@ const uploadExcel = async (req, res) => {
     if (thisUser.Department !== process.env.HR_DEPARTMENT_ID)
       return catchError(
         errMessages.notAuthorizedToInsertPersonnel,
-        "error",
+        'error',
         res
       );
   } catch (error) {
-    return catchError(errMessages.couldNotFetchUser, "error", res);
+    return catchError(errMessages.couldNotFetchUser, 'error', res);
   }
   // Actually do the upload
   upload(req, res, async (err) => {
     if (err instanceof multer.MulterError) {
-      return catchError(errMessages.uploadFailed, "error", res);
+      return catchError(errMessages.uploadFailed, 'error', res);
     } else if (err) {
-      return catchError(errMessages.errWhileUpload, "error", res);
+      return catchError(errMessages.errWhileUpload, 'error', res);
     }
     // Everything went fine with multer and uploading
     const excelName = req.uploaded_excel_file_name;
     if (!excelName) {
-      return catchError(errMessages.failedSavingExcel, "error", res);
+      return catchError(errMessages.failedSavingExcel, 'error', res);
     }
     try {
       const excelPath =
         process.env.SERVER_URL +
-        ":" +
+        ':' +
         process.env.PORT +
-        "/" +
+        '/' +
         process.env.UPLOAD_DIR_EXCEL +
         excelName;
 
-      let query = "";
+      let query = '';
 
       xlsxj(
         {
           input:
-            path.join(__dirname, "../") +
+            path.join(__dirname, '../') +
             process.env.EXCELS_STATIC_PATH +
             excelName,
           output:
-            path.join(__dirname, "../") +
+            path.join(__dirname, '../') +
             process.env.EXCELS_STATIC_PATH +
             excelName +
-            ".json",
+            '.json',
         },
         function (err, result) {
           if (err) {
@@ -81,8 +81,8 @@ const uploadExcel = async (req, res) => {
               columns.push(excelColumnName);
             });
 
-            const columnsInQuery = "(" + columns.join(",") + ")";
-            let rowsInQuery = "";
+            const columnsInQuery = '(' + columns.join(',') + ')';
+            let rowsInQuery = '';
 
             // Loop through excel rows and get values
             result.forEach((excelRow) => {
@@ -90,7 +90,7 @@ const uploadExcel = async (req, res) => {
               Object.values(excelRow).forEach((rowColumnValue) => {
                 queryColumnValues.push(`N'${rowColumnValue}'`);
               });
-              rowsInQuery += "(" + queryColumnValues.join(",") + "),";
+              rowsInQuery += '(' + queryColumnValues.join(',') + '),';
             });
 
             rowsInQuery = rowsInQuery.slice(0, -1);
@@ -110,11 +110,11 @@ const uploadExcel = async (req, res) => {
     } catch (error) {
       if (error.message)
         return catchError(
-          error.message.substring(error.message.lastIndexOf("]") + 1),
-          "error",
+          error.message.substring(error.message.lastIndexOf(']') + 1),
+          'error',
           res
         );
-      else return catchError(errMessages.operationFailed, "error", res);
+      else return catchError(errMessages.operationFailed, 'error', res);
     }
   });
 };
@@ -135,19 +135,19 @@ const changeDepartment = async (req, res) => {
   try {
     thisPerson = await fetchThisPerson(perNo, res);
   } catch (err) {
-    return catchError(errMessages.couldNotFetchPerson, "error", res);
+    return catchError(errMessages.couldNotFetchPerson, 'error', res);
   }
   if (!thisPerson)
-    return catchError(errMessages.personNotFound, "notfound", res);
+    return catchError(errMessages.personNotFound, 'notfound', res);
 
   let thisUser;
   // Try fetching user from DB
   try {
     thisUser = await fetchThisUser(id, res);
   } catch (error) {
-    return catchError(errMessages.couldNotFetchUser, "error", res);
+    return catchError(errMessages.couldNotFetchUser, 'error', res);
   }
-  if (!thisPerson) return catchError(errMessages.userNotFound, "notfound", res);
+  if (!thisPerson) return catchError(errMessages.userNotFound, 'notfound', res);
 
   const thisUserRoles = await fetchThisUserRoles(id);
   let authedDepartments = [];
@@ -164,27 +164,27 @@ const changeDepartment = async (req, res) => {
   if (thisPerson.Department !== thisUser.Department) {
     // Check if user is not in HR
     if (thisUser.Department !== process.env.HR_DEPARTMENT_ID) {
-      return catchError(errMessages.notAuthorizedToChangeDep, "error", res);
+      return catchError(errMessages.notAuthorizedToChangeDep, 'error', res);
     } else {
       let isPermitted = false;
       // Check if no auth found at all
       if (authedDepartments.length < 1)
-        return catchError(errMessages.noAuthFound, "error", res);
+        return catchError(errMessages.noAuthFound, 'error', res);
       // Check if user has the role in HR
       authedDepartments.forEach((loopAuthDep) => {
         if (loopAuthDep.value === process.env.HR_DEPARTMENT_ID) {
           if (
-            loopAuthDep.role === "can_do_all" ||
-            loopAuthDep.role === "head" ||
-            loopAuthDep.role === "succ" ||
-            loopAuthDep.role === "operator"
+            loopAuthDep.role === 'can_do_all' ||
+            loopAuthDep.role === 'head' ||
+            loopAuthDep.role === 'succ' ||
+            loopAuthDep.role === 'operator'
           ) {
             isPermitted = true;
           }
         }
       });
       if (!isPermitted)
-        return catchError(errMessages.notAuthorizedToChangeDep, "bad", res);
+        return catchError(errMessages.notAuthorizedToChangeDep, 'bad', res);
     }
   } else {
     // If user is not in HR
@@ -193,23 +193,23 @@ const changeDepartment = async (req, res) => {
     authedDepartments.forEach((loopAuthDep) => {
       if (loopAuthDep.value === thisPerson.Department) {
         if (
-          loopAuthDep.role === "can_do_all" ||
-          loopAuthDep.role === "head" ||
-          loopAuthDep.role === "succ" ||
-          loopAuthDep.role === "operator"
+          loopAuthDep.role === 'can_do_all' ||
+          loopAuthDep.role === 'head' ||
+          loopAuthDep.role === 'succ' ||
+          loopAuthDep.role === 'operator'
         ) {
           isPermitted = true;
         }
       }
     });
     if (!isPermitted)
-      return catchError(errMessages.noAuthInDepToChangeDep, "bad", res);
+      return catchError(errMessages.noAuthInDepToChangeDep, 'bad', res);
     // if user is trying to change personnel department to sth else than nowhere
     if (
       department !== process.env.NOWHERE_DEPARTMENT_ID &&
       thisUser.Department !== process.env.HR_DEPARTMENT_ID
     ) {
-      return catchError(errMessages.canOnlyUnsetPersonDep, "bad", res);
+      return catchError(errMessages.canOnlyUnsetPersonDep, 'bad', res);
     }
   }
 
@@ -222,7 +222,7 @@ const changeDepartment = async (req, res) => {
 
     return res.status(status.success).send();
   } catch (err) {
-    return catchError(errMessages.couldNotUpdatePersonDep, "error", res);
+    return catchError(errMessages.couldNotUpdatePersonDep, 'error', res);
   }
 };
 
@@ -240,11 +240,11 @@ const insertPerson = async (req, res) => {
     if (thisUser.Department !== process.env.HR_DEPARTMENT_ID)
       return catchError(
         errMessages.notAuthorizedToInsertPersonnel,
-        "error",
+        'error',
         res
       );
   } catch (error) {
-    return catchError(errMessages.couldNotFetchUser, "error", res);
+    return catchError(errMessages.couldNotFetchUser, 'error', res);
   }
   const { isSoldier, Name, Family, NewPerNo, NewNationalID, Rank, Department } =
     req.body;
@@ -256,15 +256,15 @@ const insertPerson = async (req, res) => {
     isEmpty(Rank) ||
     isEmpty(Department)
   ) {
-    return catchError(errMessages.emptyFields, "bad", res);
+    return catchError(errMessages.emptyFields, 'bad', res);
   }
 
   // If person isSoldier make NID his PerNo
-  let personPerNo = "";
+  let personPerNo = '';
   if (isSoldier) personPerNo = NewNationalID;
   else personPerNo = NewPerNo;
 
-  let PersonIsSoldier = isSoldier ? "1" : "0";
+  let PersonIsSoldier = isSoldier ? '1' : '0';
 
   try {
     const query = `INSERT INTO NameList (Acp_Name, Acp_Fami, PerNo, NID, Department, ShRank, IsSoldier) VALUES (N'${Name}', N'${Family}', '${personPerNo}', '${NewNationalID}', '${Department}', '${Rank}', '${PersonIsSoldier}')`;
@@ -275,9 +275,9 @@ const insertPerson = async (req, res) => {
     return res.status(status.success).send();
   } catch (error) {
     if (error.code === 2627)
-      return catchError(errMessages.personPerNoDubplicate, "bad", res);
+      return catchError(errMessages.personPerNoDubplicate, 'bad', res);
     console.log(error);
-    return catchError(errMessages.personInsertFailed, "error", res);
+    return catchError(errMessages.personInsertFailed, 'error', res);
   }
 };
 
@@ -312,20 +312,20 @@ const fetchPeople = async (req, res) => {
     if (thisUser.Department !== process.env.HR_DEPARTMENT_ID) {
       // Check if user has no permittedDepartments then return nothing
       if (permittedDepartments.length === 0)
-        return catchError(errMessages.noPermittedDepartments, "bad", res);
+        return catchError(errMessages.noPermittedDepartments, 'bad', res);
       else {
-        query += ` where (Department in (${permittedDepartments.join(",")})`;
+        query += ` where (Department in (${permittedDepartments.join(',')})`;
         peopleCountQuery += ` where (Department in (${permittedDepartments.join(
-          ","
+          ','
         )})`;
         queryHasWhere = true;
       }
     }
     let parsedDepartments;
-    if (!isEmpty(departments) && departments !== "based_on_auth")
-      parsedDepartments = departments.split(",").join("','");
+    if (!isEmpty(departments) && departments !== 'based_on_auth')
+      parsedDepartments = departments.split(',').join("','");
     // Check if user wants to see personnel in a particular department
-    if (!isEmpty(departments) && departments !== "based_on_auth") {
+    if (!isEmpty(departments) && departments !== 'based_on_auth') {
       if (queryHasWhere) {
         query += ` and Department in ('${parsedDepartments}'))`;
         peopleCountQuery += ` and Department in ('${parsedDepartments}'))`;
@@ -335,7 +335,7 @@ const fetchPeople = async (req, res) => {
         queryHasWhere = true;
       }
     }
-    if (departments === "based_on_auth") {
+    if (departments === 'based_on_auth') {
       if (queryHasWhere) {
         query += ` and Department = '${permittedDepartments[0]}')`;
         peopleCountQuery += ` and Department = '${permittedDepartments[0]}')`;
@@ -349,19 +349,19 @@ const fetchPeople = async (req, res) => {
     if (isEmpty(departments)) {
       // Check to close paranthesis on permittedDepartments where clause
       if (queryHasWhere) {
-        query += ")";
-        peopleCountQuery += ")";
+        query += ')';
+        peopleCountQuery += ')';
       }
     }
 
     // Where clause for the search text
     if (!isEmpty(search_text)) {
       if (queryHasWhere) {
-        query += " and(";
-        peopleCountQuery += " and(";
+        query += ' and(';
+        peopleCountQuery += ' and(';
       } else {
-        query += " where(";
-        peopleCountQuery += " where(";
+        query += ' where(';
+        peopleCountQuery += ' where(';
         queryHasWhere = true;
       }
 
@@ -369,28 +369,26 @@ const fetchPeople = async (req, res) => {
       const whereWithoutOr = (column) => ` ${column} LIKE N'%${search_text}%')`;
 
       // Change query to fetch people based on search_text
-      query += where("Acp_Name");
-      peopleCountQuery += where("Acp_Name");
-      query += where("Acp_Fami");
-      peopleCountQuery += where("Acp_Fami");
-      query += where("PerNo");
-      peopleCountQuery += where("PerNo");
-      query += whereWithoutOr("NID");
-      peopleCountQuery += whereWithoutOr("NID");
+      query += where('Acp_Name');
+      peopleCountQuery += where('Acp_Name');
+      query += where('Acp_Fami');
+      peopleCountQuery += where('Acp_Fami');
+      query += where('PerNo');
+      peopleCountQuery += where('PerNo');
+      query += whereWithoutOr('NID');
+      peopleCountQuery += whereWithoutOr('NID');
     }
 
     const connection = await sql.promises.open(process.env.DAST_DB_CONNECTION);
     const dataCount = await connection.promises.query(peopleCountQuery);
 
     // Calculate number of people and pages
-    const totalCount = Number(dataCount.first[0][""]);
+    const totalCount = Number(dataCount.first[0]['']);
 
     // Actually query the DB for people
     const data = await connection.promises.query(query);
     const people = data.results[0].length > 0 ? data.results[0] : [];
     await connection.promises.close();
-
-    console.log(people);
 
     // Send response
     successMessage.people = people;
@@ -398,7 +396,26 @@ const fetchPeople = async (req, res) => {
     return res.status(status.success).send(successMessage);
   } catch (error) {
     console.log(error);
-    return catchError(errMessages.peopleFetchFailed, "error", res);
+    return catchError(errMessages.peopleFetchFailed, 'error', res);
+  }
+};
+
+const findPerson = async (req, res) => {
+  const { id } = req.query;
+  const { NationalID, PerNo } = req.user;
+  const perNo = PerNo ? PerNo : NationalID;
+
+  const thisUser = await fetchThisUser(perNo);
+
+  if (thisUser.Department !== process.env.HR_DEPARTMENT_ID)
+    return catchError(errMessages.notAuthorized, 'error', res);
+
+  // console.log(id);
+  const result = await fetchThisPerson(id, res);
+  if (!result) catchError(errMessages.personNotFound, 'notfound', res);
+  else {
+    successMessage.person = result;
+    return res.status(status.success).send(successMessage);
   }
 };
 
@@ -447,6 +464,7 @@ const fetchThisUserRoles = async (id, res) => {
 module.exports = {
   uploadExcel,
   fetchPeople,
+  findPerson,
   insertPerson,
   changeDepartment,
 };

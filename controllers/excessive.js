@@ -88,9 +88,10 @@ const uploadDastoorMaddeExcel = async (req, res) => {
             // now we are creating a query for DB
             const columns = [];
             Object.keys(result[0]).forEach((excelColumnName) => {
-              columns.push(
-                maddeHaCols[maddeHaNumbers[madde].number][excelColumnName]
-              );
+              if (excelColumnName !== 'متن نامه')
+                columns.push(
+                  maddeHaCols[maddeHaNumbers[madde].number][excelColumnName]
+                );
             });
             // Common Extra columns to be filled for all rows
             columns.push('Dastoor');
@@ -122,6 +123,8 @@ const uploadDastoorMaddeExcel = async (req, res) => {
             columns.push('Girande6Check');
             columns.push('Girande7Check');
             columns.push('Girande8Check');
+            columns.push('ToReport');
+            columns.push('TozihatGozareshDastoor');
 
             columnsInQuery = '(' + columns.join(',') + ')';
 
@@ -235,25 +238,37 @@ const uploadDastoorMaddeExcel = async (req, res) => {
                 [a['PerNo']]: a,
               }))
             );
-
-            const chunkSize = 10;
+            const chunkSize = 50;
             for (let i = 0; i <= result.length; i += chunkSize) {
               const chunk = result.slice(i, i + chunkSize);
               let rowsInQuery = '';
               // Loop through excel rows and get values
               for (const excelRow of chunk) {
                 let queryColumnValues = [];
-                Object.values(excelRow).forEach((rowColumnValue) => {
-                  queryColumnValues.push(`N'${rowColumnValue}'`);
+                Object.entries(excelRow).forEach(([key, val]) => {
+                  if (key !== 'متن نامه') queryColumnValues.push(`N'${val}'`);
                 });
-                // const rowPerNo = excelRow['شماره پرسنلی'];
-                const rowPerNo = '254159857';
+
+                const rowPerNo = excelRow['شماره پرسنلی'];
+                let personRank = '';
+                if (namONeshanMap[rowPerNo])
+                  personRank = namONeshanMap[rowPerNo]['ShRank'];
+                else
+                  return catchError(
+                    errMessages.personWithPerNo +
+                      rowPerNo +
+                      ' یافت نشد [درج اکسل ناموفق]',
+                    'error',
+                    res
+                  );
+                // const rowPerNo = '254159857';
                 // Assign the NamoNeshan from the namONeshanMap that we created
                 let NamoNeshan =
-                  ranks[namONeshanMap[rowPerNo]['ShRank']] +
+                  ranks[personRank] +
                   ' ' +
-                  namONeshanMap[rowPerNo]['Acp_Name'];
-                ' ' + namONeshanMap[rowPerNo]['Acp_Fami'];
+                  namONeshanMap[rowPerNo]['Acp_Name'] +
+                  ' ' +
+                  namONeshanMap[rowPerNo]['Acp_Fami'];
 
                 // Check if there are recievers and set booleans
                 let recieverCheck,
@@ -264,6 +279,15 @@ const uploadDastoorMaddeExcel = async (req, res) => {
                   recieverCheck6,
                   recieverCheck7,
                   recieverCheck8;
+
+                const letterText =
+                  NamoNeshan +
+                  ' به شماره پرسنلی ' +
+                  rowPerNo +
+                  ' ' +
+                  excelRow['متن نامه'];
+
+                const tgd = excelRow['زیرماده'];
 
                 excelRow['گیرنده۱'] ? (recieverCheck = 1) : (recieverCheck = 0);
                 excelRow['گیرنده۲']
@@ -317,6 +341,8 @@ const uploadDastoorMaddeExcel = async (req, res) => {
                 queryColumnValues.push(recieverCheck6);
                 queryColumnValues.push(recieverCheck7);
                 queryColumnValues.push(recieverCheck8);
+                queryColumnValues.push(`N'${letterText}'`);
+                queryColumnValues.push(`N'${tgd}'`);
 
                 rowsInQuery += '(' + queryColumnValues.join(',') + '),';
               }
@@ -324,24 +350,27 @@ const uploadDastoorMaddeExcel = async (req, res) => {
               // Remove the last comma in query (fixing the syntax)
               rowsInQuery = rowsInQuery.slice(0, -1);
 
-              queries.push(
-                `INSERT INTO ${maddeHaNumbers[madde].table} ${columnsInQuery} VALUES ${rowsInQuery}`
-              );
+              queries.push({
+                count: i,
+                qString: `INSERT INTO ${maddeHaNumbers[madde].table} ${columnsInQuery} VALUES ${rowsInQuery}`,
+              });
             }
-
             try {
+              const connection = await sql.promises.open(
+                process.env.DAST_DB_CONNECTION
+              );
               // Actually insert rows in splitted chunks
-              for (const query of queries) {
-                const connection = await sql.promises.open(
-                  process.env.DAST_DB_CONNECTION
-                );
-                await connection.promises.query(query);
-                await connection.promises.close();
+              for await (const query of queries) {
+                // console.log(query.count);
+                await connection.promises.query(query.qString);
+                // console.log('inserted');
               }
+              await connection.promises.close();
 
               successMessage.excel_path = excelPath;
               return res.status(status.success).send(successMessage);
             } catch (error) {
+              console.log(error);
               return catchError(
                 errMessages.excelImportFailedAtSomePoint,
                 'error',

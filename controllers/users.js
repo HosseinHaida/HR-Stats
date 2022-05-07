@@ -241,7 +241,7 @@ const deleteAuth = async (req, res) => {
       return catchError(errMessages.couldNotFetchUser, 'error', res);
 
     // Check if user has permission to delete Auth
-    if (thisUser.Department !== process.env.HR_DEPARTMENT_ID) {
+    if (thisUser.Department === process.env.HR_DEPARTMENT_ID) {
       const rolesInThisDep = await fetchUserAuthInDepartment(id, department_id);
 
       if (!rolesInThisDep)
@@ -259,6 +259,8 @@ const deleteAuth = async (req, res) => {
       ) {
         return catchError(errMessages.permissionDeniedOnAuthDelete, 'bad', res);
       }
+    } else {
+      return catchError(errMessages.permissionDeniedOnAuthDelete, 'bad', res);
     }
 
     try {
