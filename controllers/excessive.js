@@ -34,11 +34,14 @@ const uploadDastoorMaddeExcel = async (req, res) => {
   // Check user permission
   try {
     const thisUserRoles = await fetchThisUserRoles(id);
+
     let isPermitted = false;
     thisUserRoles.forEach((loopPermission) => {
       if (
         loopPermission.Role === 'can_upload_dastoor' ||
-        loopPermission.Role === 'can_do_all'
+        loopPermission.Role === 'can_do_all' ||
+        loopPermission.Role === 'head' ||
+        loopPermission.Role === 'succ'
       )
         isPermitted = true;
     });
