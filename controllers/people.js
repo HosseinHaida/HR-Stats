@@ -405,13 +405,22 @@ const findPerson = async (req, res) => {
   const { NationalID, PerNo } = req.user;
   const perNo = PerNo ? PerNo : NationalID;
 
+  const thisUserRoles = await fetchThisUserRoles(perNo);
   const thisUser = await fetchThisUser(perNo);
-
-  if (thisUser.Department !== process.env.HR_DEPARTMENT_ID)
-    return catchError(errMessages.notAuthorized, 'error', res);
-
-  // console.log(id);
   const result = await fetchThisPerson(id, res);
+
+  let permittedDepartments = [];
+
+  thisUserRoles.forEach((loopPermission) => {
+    permittedDepartments.push(loopPermission.DepartmentID);
+  });
+
+  if (thisUser.Department !== process.env.HR_DEPARTMENT_ID) {
+    if (!permittedDepartments.includes(result.Department)) {
+      return catchError(errMessages.notAuthorized, 'error', res);
+    }
+  }
+
   if (!result) catchError(errMessages.personNotFound, 'notfound', res);
   else {
     successMessage.person = result;
@@ -425,7 +434,7 @@ const findPerson = async (req, res) => {
  * @returns {object} user
  */
 const fetchThisUser = async (id, res) => {
-  const query = `select * from Users where PerNo = ${id} or NationalID = ${id}`;
+  const query = `select * from Users where PerNo = N'${id}' or NationalID = N'${id}'`;
   const connection = await sql.promises.open(process.env.STATS_DB_CONNECTION);
   const data = await connection.promises.query(query);
   await connection.promises.close();
@@ -453,7 +462,7 @@ const fetchThisPerson = async (id, res) => {
  * @returns {object} array of permissions
  */
 const fetchThisUserRoles = async (id, res) => {
-  const query = `select * from Auth inner join Departments ON Auth.DepartmentID=Departments.ID where Auth.UserID = ${id}`;
+  const query = `select * from Auth inner join Departments ON Auth.DepartmentID=Departments.ID where Auth.UserID = N'${id}'`;
   const connection = await sql.promises.open(process.env.STATS_DB_CONNECTION);
   const data = await connection.promises.query(query);
   await connection.promises.close();

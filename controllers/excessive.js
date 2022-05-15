@@ -36,7 +36,11 @@ const uploadDastoorMaddeExcel = async (req, res) => {
     const thisUserRoles = await fetchThisUserRoles(id);
     let isPermitted = false;
     thisUserRoles.forEach((loopPermission) => {
-      if (loopPermission.Role === 'can_upload_dastoor') isPermitted = true;
+      if (
+        loopPermission.Role === 'can_upload_dastoor' ||
+        loopPermission.Role === 'can_do_all'
+      )
+        isPermitted = true;
     });
     if (!isPermitted)
       return catchError(errMessages.notPermittedToUploadDastoor, 'bad', res);
@@ -159,7 +163,7 @@ const uploadDastoorMaddeExcel = async (req, res) => {
                 `SELECT * FROM Selsele`
               );
               const userFetchedFromMembers = await connection.promises.query(
-                `SELECT * FROM member WHERE idp = '${id}'`
+                `SELECT * FROM member WHERE idp = N'${id}'`
               );
               await connection.promises.close();
               if (userFetchedFromMembers.first.length < 1)
@@ -399,7 +403,7 @@ const uploadDastoorMaddeExcel = async (req, res) => {
  * @returns {object} user
  */
 const fetchThisUser = async (id) => {
-  const query = `select * from Users where PerNo = ${id} or NationalID = ${id}`;
+  const query = `select * from Users where PerNo = N'${id}' or NationalID = N'${id}'`;
   const connection = await sql.promises.open(process.env.STATS_DB_CONNECTION);
   const data = await connection.promises.query(query);
   await connection.promises.close();
@@ -413,7 +417,7 @@ const fetchThisUser = async (id) => {
  * @returns {object} array of permissions
  */
 const fetchThisUserRoles = async (id) => {
-  const query = `select * from Auth inner join Departments ON Auth.DepartmentID=Departments.ID where Auth.UserID = ${id}`;
+  const query = `select * from Auth inner join Departments ON Auth.DepartmentID=Departments.ID where Auth.UserID = N'${id}'`;
   const connection = await sql.promises.open(process.env.STATS_DB_CONNECTION);
   const data = await connection.promises.query(query);
   await connection.promises.close();

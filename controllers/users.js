@@ -12,6 +12,9 @@ const { errMessages } = require('../helpers/error-messages');
 const { successMessage, status } = require('../helpers/status');
 var sql = require('msnodesqlv8');
 
+const multer = require('multer');
+const { upload } = require('./profilePhotoUpload');
+
 // const multer = require("multer");
 // const { upload } = require("./usersPhotoUpload");
 // const { userHasScope } = require("./scopesController");
@@ -93,7 +96,7 @@ const siginUser = async (req, res) => {
     successMessage.user.token = token;
     return res.status(status.success).send(successMessage);
   } catch (error) {
-    console.log('salam: ', error);
+    console.log('Signin Error: ', error);
     return catchError(errMessages.couldNotFetchUser, 'error', res);
   }
 };
@@ -141,12 +144,22 @@ const fetchUser = async (req, res) => {
     } else {
       permissions.permittedDepartments = departments;
     }
-
-    if (!thisUser) return catchError(errMessages.userNotFound, 'notfound', res);
+    // fetch department head from Auth and Users tables
+    const headFetchQuery = `SELECT * FROM Users INNER JOIN Auth on Auth.UserID = Users.PerNo WHERE Auth.Role = 'head' AND Auth.DepartmentID = '${thisUser.Department}'`;
+    let depHead = null;
+    try {
+      const connection = await sql.promises.open(
+        process.env.STATS_DB_CONNECTION
+      );
+      const result = await connection.promises.query(headFetchQuery);
+      if (result.first.length > 0) depHead = result.first[0];
+      await connection.promises.close();
+    } catch (error) {}
 
     delete thisUser.PasswordHash;
     // Create user obj with token && send to client
     successMessage.user = thisUser;
+    successMessage.user.head = depHead;
     successMessage.user.permissions = permissions;
     successMessage.departments = departments;
     return res.status(status.success).send(successMessage);
@@ -307,7 +320,7 @@ const fetchUsers = async (req, res) => {
   try {
     // Query to fetch people from DB
     let query =
-      'select Users.Name, Users.Family, Users.Father, Users.NationalID, Users.Signature, Users.SuccessorSignature, Users.Rank, Users.Department, Users.IsSoldier, Users.PerNo, Auth.Role, Auth.DepartmentID as AuthDepartmentID from Auth inner join Users on Auth.UserID=Users.PerNo';
+      'select Users.Name, Users.Family, Users.Father, Users.NationalID, Users.Signature, Users.SuccessorSignature, Users.Rank, Users.Department, Users.IsSoldier, Users.PerNo, Users.Photo, Auth.Role, Auth.DepartmentID as AuthDepartmentID from Auth inner join Users on Auth.UserID=Users.PerNo';
     // Query for number of people
     let usersCountQuery = `select count(*) from Users`;
 
@@ -363,12 +376,75 @@ const fetchUsers = async (req, res) => {
 };
 
 /**
+ * Upload user profile photo
+ * @param {object} req
+ * @param {object} res
+ * @returns {object} success message
+ */
+const uploadProfilePhoto = async (req, res) => {
+  const { NationalID, PerNo } = req.user;
+  const id = PerNo ? PerNo : NationalID;
+  // let thisUser = null;
+  // try {
+  //   thisUser = await fetchThisUser(id, res);
+  // if (thisUser.Department !== process.env.HR_DEPARTMENT_ID)
+  //   return catchError(
+  //     errMessages.notAuthorizedToInsertPersonnel,
+  //     'error',
+  //     res
+  //   );
+  // } catch (error) {
+  // return catchError(errMessages.couldNotFetchUser, 'error', res);
+  // }
+  // Actually do the upload
+  upload(req, res, async (err) => {
+    if (err instanceof multer.MulterError) {
+      return catchError(errMessages.uploadFailed, 'error', res);
+    } else if (err) {
+      return catchError(errMessages.errWhileUpload, 'error', res);
+    }
+    // Everything went fine with multer and uploading
+    const photoName = req.photo_name;
+    if (!photoName) {
+      return catchError(errMessages.failedSavingPhoto, 'error', res);
+    }
+    try {
+      const photoPath =
+        process.env.SERVER_URL +
+        ':' +
+        process.env.PORT +
+        '/' +
+        process.env.UPLOAD_DIR_PROFILES +
+        photoName;
+
+      let query = `UPDATE Users SET Photo='${photoPath}' WHERE PerNo='${id}'`;
+      const connection = await sql.promises.open(
+        process.env.STATS_DB_CONNECTION
+      );
+      await connection.promises.query(query);
+      await connection.promises.close();
+
+      successMessage.photo_path = photoPath;
+      return res.status(status.success).send(successMessage);
+    } catch (error) {
+      if (error.message)
+        return catchError(
+          error.message.substring(error.message.lastIndexOf(']') + 1),
+          'error',
+          res
+        );
+      else return catchError(errMessages.operationFailed, 'error', res);
+    }
+  });
+};
+
+/**
  * Fetch user from DB
  * @param {integer} id
  * @returns {object} user
  */
 const fetchThisUser = async (id, res) => {
-  const query = `select * from Users where PerNo = ${id} or NationalID = ${id}`;
+  const query = `select * from Users where PerNo = N'${id}' or NationalID = N'${id}'`;
   const connection = await sql.promises.open(process.env.STATS_DB_CONNECTION);
   const data = await connection.promises.query(query);
   await connection.promises.close();
@@ -382,7 +458,7 @@ const fetchThisUser = async (id, res) => {
  * @returns {object} array of permissions
  */
 const fetchThisUserRoles = async (id, res) => {
-  const query = `select * from Auth inner join Departments ON Auth.DepartmentID=Departments.ID where Auth.UserID = ${id}`;
+  const query = `select * from Auth inner join Departments ON Auth.DepartmentID=Departments.ID where Auth.UserID = N'${id}'`;
   const connection = await sql.promises.open(process.env.STATS_DB_CONNECTION);
   const data = await connection.promises.query(query);
   await connection.promises.close();
@@ -396,7 +472,7 @@ const fetchThisUserRoles = async (id, res) => {
  * @returns {object} array of permissions
  */
 const fetchUserAuthInDepartment = async (id, depID, res) => {
-  const query = `select Role from Auth where UserID = ${id} and DepartmentID = ${depID}`;
+  const query = `select Role from Auth where UserID = N'${id}' and DepartmentID = N'${depID}'`;
   const connection = await sql.promises.open(process.env.STATS_DB_CONNECTION);
   const data = await connection.promises.query(query);
   await connection.promises.close();
@@ -424,4 +500,5 @@ module.exports = {
   fetchUsers,
   insertUser,
   deleteAuth,
+  uploadProfilePhoto,
 };

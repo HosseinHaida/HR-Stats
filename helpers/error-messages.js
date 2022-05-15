@@ -12,6 +12,7 @@ const errMessages = {
   uploadFailed: 'آپلود ناموفق',
   errWhileUpload: 'خطا در آپلود فایل',
   failedSavingExcel: 'زخیره فایل ناموفق',
+  failedSavingPhoto: 'زخیره تصویر ناموفق',
   emptyFields: 'لطفا فیلدهای خالی را پر کنید',
   personInsertFailed: 'خطا در ایجاد پرسنل در پایگاه داده',
   fillSoldiersNID: 'کد ملی وظیفه را وارد نمایید',
@@ -39,7 +40,7 @@ const errMessages = {
   personWithPerNo: 'فرد با شماره پرسنلی ',
   excelImportFailedAtSomePoint: 'ورود اطلاعات از فایل اکسل با مشکل مواجه شد',
   notAuthorized: 'عدم وجود مجوز',
-  youAreNotInTheSameDep: 'شما تنها مجاز به ثبت مرخصی برای افراد قسمت خود هستید',
+  // youAreNotInTheSameDep: 'شما تنها مجاز به ثبت مرخصی برای افراد قسمت خود هستید',
   dayOffInsertFailed: 'ثبت مرخصی با خطا مواجه شد',
   daysOffFetchFailed: 'واکشی مرخصی‌ها با خطا مواجه شد',
 };
