@@ -143,6 +143,21 @@ const register = async (req, res) => {
 };
 
 /**
+ * Fetch department's todays Stats from db if there are any
+ * @param {*} req
+ * @param {*} res
+ * returns stats
+ */
+const fetchTodaysStats = async (req, res) => {
+  const { NationalID, PerNo } = req.user;
+  const id = PerNo ? PerNo : NationalID;
+  const { department } = req.params;
+
+  console.log(department);
+  console.log(id);
+};
+
+/**
  * Fetch daysOff records from users department
  * @param {*} req
  * @param {*} res
@@ -405,4 +420,5 @@ module.exports = {
   register,
   setDaysOff,
   fetchDaysOff,
+  fetchTodaysStats,
 };
