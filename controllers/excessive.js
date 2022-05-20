@@ -175,7 +175,7 @@ const uploadDastoorMaddeExcel = async (req, res) => {
                   'notfound',
                   res
                 );
-              dastoorVal = tblSabetRes.first[0]['dastoorMamoriat'];
+              dastoorVal = tblSabetRes.first[0]['dastoorPivar'];
               maddeVal = maddeHaNumbers[madde].number;
               eghdamgarVal = ranks[thisUser.Rank] + ' ' + thisUser.Family;
               TarikhSabtVal = new Date().toLocaleDateString('fa-IR');
@@ -245,7 +245,7 @@ const uploadDastoorMaddeExcel = async (req, res) => {
                 [a['PerNo']]: a,
               }))
             );
-            const chunkSize = 50;
+            const chunkSize = 1000;
             for (let i = 0; i <= result.length; i += chunkSize) {
               const chunk = result.slice(i, i + chunkSize);
               let rowsInQuery = '';

@@ -41,8 +41,10 @@ const register = async (req, res) => {
       )
         isUserAuthed = true;
     });
-    if (!isUserAuthed) return catchError(errMessages.userIsNotAuthedForThisDep);
+    if (!isUserAuthed)
+      return catchError(errMessages.userIsNotAuthedForThisDep, 'bad', res);
   } catch (error) {
+    console.log(error);
     return catchError(errMessages.couldNotFetchUser, 'error', res);
   }
 
@@ -93,6 +95,21 @@ const register = async (req, res) => {
   timeMins = timeMins < 10 ? '0' + timeMins : timeMins;
 
   try {
+    const offsQuery = `SELECT * FROM Offs WHERE department = '${department}'`;
+    const dastConnection = await sql.promises.open(
+      process.env.DAST_DB_CONNECTION
+    );
+    const offsRes = await dastConnection.promises.query(offsQuery);
+    await dastConnection.promises.close();
+    if (offsRes.first.length > 0)
+      offsRes.first.forEach((offRec) => {
+        // console.log(offRec.off_from, irDate);
+        const recDate = new Date(`${offRec.off_to}`);
+        // const irDateNew = new Date().toLocaleDateString('fa-IR');
+        console.log(recDate, irDate);
+        // console.log(recDate.getTime() > date.getTime());
+      });
+
     const query = `INSERT INTO DailyStats (Date,Time,DepartmentID,UserID,${Object.keys(
       parsedStats
     ).join(
@@ -100,9 +117,11 @@ const register = async (req, res) => {
     )}) VALUES (N'${irDate}', N'${timeHrs}:${timeMins}', '${department}', '${id}', '${Object.values(
       parsedStats
     ).join("','")}')`;
-    const connection = await sql.promises.open(process.env.STATS_DB_CONNECTION);
-    await connection.promises.query(query);
-    await connection.promises.close();
+    const statsConnection = await sql.promises.open(
+      process.env.STATS_DB_CONNECTION
+    );
+    await statsConnection.promises.query(query);
+    await statsConnection.promises.close();
 
     if (timeHrs > 9 || (timeHrs === 9 && timeMins > 10))
       successMessage.delay = true;
@@ -226,16 +245,6 @@ const fetchDaysOff = async (req, res) => {
       queryHasWhere = true;
     }
   }
-  // if (departments === 'based_on_auth') {
-  //   if (queryHasWhere) {
-  //     query += ` and n.Department = '${permittedDepartments[0]}')`;
-  //     daysOffCountQuery += ` and n.Department = '${permittedDepartments[0]}')`;
-  //   } else {
-  //     query += ` where n.Department = '${permittedDepartments[0]}'`;
-  //     daysOffCountQuery += ` where n.Department = '${permittedDepartments[0]}'`;
-  //     queryHasWhere = true;
-  //   }
-  // }
 
   if (isEmpty(departments)) {
     // Check to close paranthesis on permittedDepartments where clause
@@ -271,8 +280,6 @@ const fetchDaysOff = async (req, res) => {
     query += whereWithoutOr('NID');
     daysOffCountQuery += whereWithoutOr('NID');
   }
-
-  console.log(query);
 
   // Now actually fetch daysOff Records
   try {

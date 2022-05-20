@@ -337,11 +337,11 @@ const fetchPeople = async (req, res) => {
     }
     if (departments === 'based_on_auth') {
       if (queryHasWhere) {
-        query += ` and Department = '${permittedDepartments[0]}')`;
-        peopleCountQuery += ` and Department = '${permittedDepartments[0]}')`;
+        query += ` and Department = '${thisUser.Department}')`;
+        peopleCountQuery += ` and Department = '${thisUser.Department}')`;
       } else {
-        query += ` where Department = '${permittedDepartments[0]}'`;
-        peopleCountQuery += ` where Department = '${permittedDepartments[0]}'`;
+        query += ` where Department = '${thisUser.Department}'`;
+        peopleCountQuery += ` where Department = '${thisUser.Department}'`;
         queryHasWhere = true;
       }
     }
