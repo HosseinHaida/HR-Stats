@@ -43,6 +43,8 @@ const errMessages = {
   // youAreNotInTheSameDep: 'شما تنها مجاز به ثبت مرخصی برای افراد قسمت خود هستید',
   dayOffInsertFailed: 'ثبت مرخصی با خطا مواجه شد',
   daysOffFetchFailed: 'واکشی مرخصی‌ها با خطا مواجه شد',
+  statsInsertFailed: 'درج آمار روزانه با مشکل مواجه شد',
+  statsAlreadyInserted: 'آمار امروز برای این قسمت یکبار ثبت شده است',
 };
 
 module.exports = { errMessages };

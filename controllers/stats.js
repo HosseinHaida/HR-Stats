@@ -35,7 +35,11 @@ const register = async (req, res) => {
     // Check if user is authed for the requested department id
     let isUserAuthed = false;
     authedDepartments.forEach((loopAuth) => {
-      if (loopAuth.value === department) isUserAuthed = true;
+      if (
+        loopAuth.value === department &&
+        process.env.AVAIL_ROLES.indexOf(loopAuth.role) > -1
+      )
+        isUserAuthed = true;
     });
     if (!isUserAuthed) return catchError(errMessages.userIsNotAuthedForThisDep);
   } catch (error) {
@@ -88,33 +92,34 @@ const register = async (req, res) => {
   timeHrs = timeHrs < 10 ? '0' + timeHrs : timeHrs;
   timeMins = timeMins < 10 ? '0' + timeMins : timeMins;
 
-  //   console.log(irDate, timeHrs, timeMins);
-
-  //   if (
-  //     (isEmpty(NewPerNo) && !isSoldier) ||
-  //     isEmpty(NewNationalID) ||
-  //     isEmpty(Rank) ||
-  //     isEmpty(Department) ||
-  //     isEmpty(Password) ||
-  //     isEmpty(Role)
-  //   ) {
-  //     return catchError(errMessages.emptyFields, 'bad', res);
-  //   }
-
   try {
-    const query = `INSERT INTO Users (Name, Family, PerNo, NationalID, Department, Rank, IsSoldier, PasswordHash) VALUES (N'${Name}', N'${Family}', '${userPerNo}', '${NewNationalID}', '${Department}', '${Rank}', '${PersonIsSoldier}', '${password_hash}')`;
-    const authQuery = `INSERT INTO Auth (UserID, DepartmentID, Role) VALUES (N'${userPerNo}', N'${Department}', '${Role}')`;
+    const query = `INSERT INTO DailyStats (Date,Time,DepartmentID,UserID,${Object.keys(
+      parsedStats
+    ).join(
+      ','
+    )}) VALUES (N'${irDate}', N'${timeHrs}:${timeMins}', '${department}', '${id}', '${Object.values(
+      parsedStats
+    ).join("','")}')`;
     const connection = await sql.promises.open(process.env.STATS_DB_CONNECTION);
     await connection.promises.query(query);
-    await connection.promises.query(authQuery);
     await connection.promises.close();
 
-    return res.status(status.success).send();
+    if (timeHrs > 9 || (timeHrs === 9 && timeMins > 10))
+      successMessage.delay = true;
+    else successMessage.delay = false;
+    return res.status(status.success).send(successMessage);
   } catch (error) {
-    if (error.code === 2627)
-      return catchError(errMessages.userPerNoDubplicate, 'bad', res);
-    console.log(error);
-    return catchError(errMessages.userInsertFailed, 'error', res);
+    // console.log(error);
+    if (error.message) {
+      if (error.message.includes('PK_DailyStats'))
+        return catchError(errMessages.statsAlreadyInserted, 'bad', res);
+      return catchError(
+        error.message.substring(error.message.lastIndexOf(']') + 1),
+        'error',
+        res
+      );
+    }
+    return catchError(errMessages.statsInsertFailed, 'error', res);
   }
 };
 
