@@ -95,7 +95,7 @@ const register = async (req, res) => {
   timeMins = timeMins < 10 ? '0' + timeMins : timeMins;
 
   try {
-    const offsQuery = `SELECT * FROM Offs WHERE department = '${department}'`;
+    const offsQuery = `SELECT * FROM Offs WHERE department = '${department.trim()}'`;
     const dastConnection = await sql.promises.open(
       process.env.DAST_DB_CONNECTION
     );
@@ -114,7 +114,7 @@ const register = async (req, res) => {
       parsedStats
     ).join(
       ','
-    )}) VALUES (N'${irDate}', N'${timeHrs}:${timeMins}', '${department}', '${id}', '${Object.values(
+    )}) VALUES (N'${irDate}', N'${timeHrs}:${timeMins}', '${department.trim()}', '${id}', '${Object.values(
       parsedStats
     ).join("','")}')`;
     const statsConnection = await sql.promises.open(
@@ -151,10 +151,30 @@ const register = async (req, res) => {
 const fetchTodaysStats = async (req, res) => {
   const { NationalID, PerNo } = req.user;
   const id = PerNo ? PerNo : NationalID;
-  const { department } = req.params;
+  const { department } = req.body;
 
-  console.log(department);
-  console.log(id);
+  try {
+    const irDate = new Date().toLocaleDateString('fa-IR', {
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+    });
+    const query = `SELECT * FROM DailyStats WHERE DepartmentID = '${department}' AND Date = N'${irDate}'`;
+    const connection = await sql.promises.open(process.env.STATS_DB_CONNECTION);
+    const result = await connection.promises.query(query);
+    await connection.promises.close();
+
+    // let ipChain = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    // ipChain = ipChain.split(':');
+    // const ip = ipChain[ipChain.length - 1];
+    // console.log(ip);
+
+    successMessage.stats = result.first[0];
+    return res.status(status.success).send(successMessage);
+  } catch (error) {
+    if (error.message) return catchError(error.message, 'error', res);
+    return catchError(errMessages.statsFetchFailed, 'error', res);
+  }
 };
 
 /**

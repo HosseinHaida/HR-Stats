@@ -45,6 +45,7 @@ const errMessages = {
   daysOffFetchFailed: 'واکشی مرخصی‌ها با خطا مواجه شد',
   statsInsertFailed: 'درج آمار روزانه با مشکل مواجه شد',
   statsAlreadyInserted: 'آمار امروز برای این قسمت یکبار ثبت شده است',
+  statsFetchFailed: 'خواندن اطلاعات آمار با خطا مواجه شد',
 };
 
 module.exports = { errMessages };
