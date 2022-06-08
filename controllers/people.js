@@ -288,7 +288,7 @@ const insertPerson = async (req, res) => {
  * @returns {object} people array
  */
 const fetchPeople = async (req, res) => {
-  const { search_text, departments } = req.query;
+  const { search_text, departments, nooffs } = req.query;
   const { NationalID, PerNo } = req.user;
   const id = PerNo ? PerNo : NationalID;
 
@@ -354,6 +354,46 @@ const fetchPeople = async (req, res) => {
       }
     }
 
+    let peopleOnVaca = [];
+    let offsRes = null;
+    // Ommit people who are off today from the list when setting dailyStats
+    if (nooffs && (nooffs === 'false' || nooffs === 'true')) {
+      const irDate = new Date().toLocaleDateString('fa-IR', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+      let tday = String(p2e(irDate));
+      tday = tday.replace('/', '-').replace('/', '-');
+      // Fetch records from Offs table for today
+      // We know already that the ${departments} is a single department now!
+      const todaysOffsQuery = `SELECT * FROM Offs o inner join NameList n on o.requester = n.PerNo WHERE o.department='${departments}' AND isApprovedByHead IS NOT NULL AND isApprovedByHead != '' AND isApprovedByHead != '0' AND DATEDIFF(day, off_to, '${tday}') <= 0 AND  DATEDIFF(day, '${tday}', off_from) <= 0 `;
+      const dastConnection = await sql.promises.open(
+        process.env.DAST_DB_CONNECTION
+      );
+      offsRes = await dastConnection.promises.query(todaysOffsQuery);
+      await dastConnection.promises.close();
+
+      // Alter the query if there are people on vaca today
+      // and noOffs is set to true
+      if (nooffs === 'true' && offsRes.first.length > 0) {
+        offsRes.first.forEach((loopOffPerson) => {
+          peopleOnVaca.push(loopOffPerson.requester);
+        });
+
+        const parsedPeopleOnVaca = peopleOnVaca.join("','");
+
+        if (queryHasWhere) {
+          query += ` and PerNo not in ('${parsedPeopleOnVaca}')`;
+          peopleCountQuery += ` and PerNo not in ('${parsedPeopleOnVaca}')`;
+        } else {
+          query += ` where PerNo not in ('${parsedPeopleOnVaca}')`;
+          peopleCountQuery += ` where PerNo not in ('${parsedPeopleOnVaca}')`;
+          queryHasWhere = true;
+        }
+      }
+    }
+
     // Where clause for the search text
     if (!isEmpty(search_text)) {
       if (queryHasWhere) {
@@ -393,12 +433,16 @@ const fetchPeople = async (req, res) => {
     // Send response
     successMessage.people = people;
     successMessage.total = totalCount;
+    successMessage.offs = offsRes ? offsRes.first : [];
+
     return res.status(status.success).send(successMessage);
   } catch (error) {
     console.log(error);
     return catchError(errMessages.peopleFetchFailed, 'error', res);
   }
 };
+
+const p2e = (s) => s.replace(/[۰-۹]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d));
 
 const findPerson = async (req, res) => {
   const { id } = req.query;

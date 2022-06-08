@@ -5,7 +5,195 @@ const { successMessage, status } = require('../helpers/status');
 var sql = require('msnodesqlv8');
 
 /**
- * Insert new User
+ * Approve a day off (admin, head, hr)
+ * @param {object} req
+ * @param {object} res
+ * @returns {object} returns info of the approver
+ */
+const approveADayOff = async (req, res) => {
+  const { NationalID, PerNo } = req.user;
+  const { id, role, dep } = req.body;
+  const userId = PerNo ? PerNo : NationalID;
+
+  let isUserAuthed = false;
+  try {
+    const thisUserRoles = await fetchThisUserRoles(userId);
+    let authedDepartments = [];
+
+    thisUserRoles.forEach((loopPermission) => {
+      authedDepartments.push({
+        label: loopPermission.Label,
+        value: loopPermission.DepartmentID,
+        role: loopPermission.Role,
+      });
+    });
+
+    // Check if user can not register auth for any department
+    if (authedDepartments.length < 1)
+      return catchError(errMessages.userHasNoAuth, 'bad', res);
+
+    let roles = null;
+    if (role === 'admin') roles = ['admin_head', 'admin_succ', 'can_do_all'];
+    if (role === 'head') roles = ['head', 'succ', 'can_do_all'];
+    if (role === 'hr') roles = ['head', 'succ', 'can_do_all'];
+
+    let department = role === 'hr' ? process.env.HR_DEPARTMENT_ID : dep;
+
+    // Check if user is authed for the requested department id
+    authedDepartments.forEach((loopAuth) => {
+      if (loopAuth.value === department && roles.indexOf(loopAuth.role) > -1)
+        isUserAuthed = true;
+    });
+    if (!isUserAuthed) return catchError(errMessages.notAuthorized, 'bad', res);
+  } catch (error) {
+    console.log(error);
+    return catchError(errMessages.authFetchFailed, 'error', res);
+  }
+
+  try {
+    const irDate = p2e(
+      new Date().toLocaleDateString('fa-IR', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      })
+    );
+
+    //   Get time for update query
+    const date = new Date();
+    let timeHrs = date.getHours();
+    let timeMins = date.getMinutes();
+
+    console.log(role);
+
+    let columnToSet = null;
+    if (role === 'admin') columnToSet = 'isApprovedByAdmin';
+    if (role === 'head') columnToSet = 'isApprovedByHead';
+    if (role === 'hr') columnToSet = 'isApprovedByHR';
+
+    const updateThisRecordQuery = `UPDATE Offs SET ${columnToSet} = '${userId},${timeHrs}:${timeMins}' WHERE id = '${id}'`;
+    const fetchThisRecordQuery = `SELECT isApprovedByAdmin, isApprovedByHead, isApprovedByHR FROM Offs WHERE id = '${id}'`;
+    const connection = await sql.promises.open(process.env.DAST_DB_CONNECTION);
+    const thisOffRecord = await connection.promises.query(fetchThisRecordQuery);
+
+    if (
+      role === 'admin' &&
+      thisOffRecord.first[0].isApprovedByAdmin &&
+      thisOffRecord.first[0].isApprovedByAdmin !== '0'
+    )
+      return catchError(errMessages.alreadyApproved, 'bad', res);
+    if (
+      role === 'head' &&
+      thisOffRecord.first[0].isApprovedByHead &&
+      thisOffRecord.first[0].isApprovedByHead !== '0'
+    )
+      return catchError(errMessages.alreadyApproved, 'bad', res);
+    if (
+      role === 'hr' &&
+      thisOffRecord.first[0].isApprovedByHR &&
+      thisOffRecord.first[0].isApprovedByHR !== '0'
+    )
+      return catchError(errMessages.alreadyApproved, 'bad', res);
+
+    await connection.promises.query(updateThisRecordQuery);
+    await connection.promises.close();
+
+    successMessage.approver = userId + ' , ' + timeHrs + ':' + timeMins;
+    return res.status(status.success).send(successMessage);
+  } catch (error) {
+    if (error.message) return catchError(error.message, 'error', res);
+    else return catchError(errMessages.approveFailed, 'error', res);
+  }
+};
+
+/**
+ * Approve today's Stats (operator, admin, head)
+ * @param {object} req
+ * @param {object} res
+ * @returns {object} returns info of the approver
+ */
+const approveStats = async (req, res) => {
+  const { NationalID, PerNo } = req.user;
+  const { dep, role } = req.body;
+  const id = PerNo ? PerNo : NationalID;
+
+  let isUserAuthed = false;
+  try {
+    const thisUserRoles = await fetchThisUserRoles(id);
+    let authedDepartments = [];
+
+    thisUserRoles.forEach((loopPermission) => {
+      authedDepartments.push({
+        label: loopPermission.Label,
+        value: loopPermission.DepartmentID,
+        role: loopPermission.Role,
+      });
+    });
+
+    // Check if user can not register auth for any department
+    if (authedDepartments.length < 1)
+      return catchError(errMessages.userHasNoAuth, 'bad', res);
+
+    let roles = null;
+    if (role === 'operator') roles = ['operator', 'can_do_all'];
+    if (role === 'admin') roles = ['admin_head', 'admin_succ', 'can_do_all'];
+    if (role === 'head') roles = ['head', 'succ', 'can_do_all'];
+
+    // Check if user is authed for the requested department id
+    authedDepartments.forEach((loopAuth) => {
+      if (loopAuth.value === dep && roles.indexOf(loopAuth.role) > -1)
+        isUserAuthed = true;
+    });
+    if (!isUserAuthed) return catchError(errMessages.notAuthorized, 'bad', res);
+  } catch (error) {
+    console.log(error);
+    return catchError(errMessages.authFetchFailed, 'error', res);
+  }
+
+  try {
+    const irDate = p2e(
+      new Date().toLocaleDateString('fa-IR', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      })
+    );
+
+    //   Get time for update query
+    const date = new Date();
+    let timeHrs = date.getHours();
+    let timeMins = date.getMinutes();
+
+    let columnToSet = null;
+    if (role === 'operator') columnToSet = 'isApprovedOperator';
+    if (role === 'admin') columnToSet = 'isApprovedAdmin';
+    if (role === 'head') columnToSet = 'isApprovedHead';
+
+    const updateTodaysStatsQuery = `UPDATE DailyStats SET ${columnToSet} = '${id},${timeHrs}:${timeMins}' WHERE Date = '${irDate}' AND DepartmentID = '${dep}'`;
+    const fetchTodaysStatsQuery = `SELECT IsApprovedHR, IsApprovedOperator, IsApprovedAdmin, IsApprovedHead FROM DailyStats WHERE Date = '${irDate}' AND DepartmentID = '${dep}'`;
+    const connection = await sql.promises.open(process.env.STATS_DB_CONNECTION);
+    const todaysStats = await connection.promises.query(fetchTodaysStatsQuery);
+
+    if (role === 'operator' && todaysStats.first[0].IsApprovedOperator)
+      return catchError(errMessages.alreadyApproved, 'bad', res);
+    if (role === 'admin' && todaysStats.first[0].IsApprovedAdmin)
+      return catchError(errMessages.alreadyApproved, 'bad', res);
+    if (role === 'head' && todaysStats.first[0].IsApprovedHead)
+      return catchError(errMessages.alreadyApproved, 'bad', res);
+
+    await connection.promises.query(updateTodaysStatsQuery);
+    await connection.promises.close();
+
+    successMessage.approver = id + ' , ' + timeHrs + ':' + timeMins;
+    return res.status(status.success).send(successMessage);
+  } catch (error) {
+    if (error.message) return catchError(error.message, 'error', res);
+    else return catchError(errMessages.approveFailed, 'error', res);
+  }
+};
+
+/**
+ * Insert today's Stats
  * @param {object} req
  * @param {object} res
  * @returns {object} return success message
@@ -82,8 +270,8 @@ const register = async (req, res) => {
   //   Create a date for today for insert query
   const irDate = new Date().toLocaleDateString('fa-IR', {
     year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
   });
 
   //   Extract time for insert query
@@ -95,26 +283,12 @@ const register = async (req, res) => {
   timeMins = timeMins < 10 ? '0' + timeMins : timeMins;
 
   try {
-    const offsQuery = `SELECT * FROM Offs WHERE department = '${department.trim()}'`;
-    const dastConnection = await sql.promises.open(
-      process.env.DAST_DB_CONNECTION
-    );
-    const offsRes = await dastConnection.promises.query(offsQuery);
-    await dastConnection.promises.close();
-    if (offsRes.first.length > 0)
-      offsRes.first.forEach((offRec) => {
-        // console.log(offRec.off_from, irDate);
-        const recDate = new Date(`${offRec.off_to}`);
-        // const irDateNew = new Date().toLocaleDateString('fa-IR');
-        console.log(recDate, irDate);
-        // console.log(recDate.getTime() > date.getTime());
-      });
-
     const query = `INSERT INTO DailyStats (Date,Time,DepartmentID,UserID,${Object.keys(
       parsedStats
-    ).join(
-      ','
-    )}) VALUES (N'${irDate}', N'${timeHrs}:${timeMins}', '${department.trim()}', '${id}', '${Object.values(
+    ).join(',')}) VALUES 
+    (N'${p2e(
+      irDate
+    )}', N'${timeHrs}:${timeMins}', '${department.trim()}', '${id}', '${Object.values(
       parsedStats
     ).join("','")}')`;
     const statsConnection = await sql.promises.open(
@@ -156,26 +330,75 @@ const fetchTodaysStats = async (req, res) => {
   try {
     const irDate = new Date().toLocaleDateString('fa-IR', {
       year: 'numeric',
-      month: 'numeric',
-      day: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
     });
-    const query = `SELECT * FROM DailyStats WHERE DepartmentID = '${department}' AND Date = N'${irDate}'`;
+    const query = `SELECT * FROM DailyStats WHERE DepartmentID = '${department}' AND Date = N'${p2e(
+      irDate
+    )}'`;
     const connection = await sql.promises.open(process.env.STATS_DB_CONNECTION);
-    const result = await connection.promises.query(query);
+    let result = await connection.promises.query(query);
     await connection.promises.close();
+
+    let tday = String(p2e(irDate));
+    tday = tday.replace('/', '-').replace('/', '-');
+    // Fetch records from Offs table for today
+    const todaysOffsQuery = `SELECT * FROM Offs o inner join NameList n on o.requester = n.PerNo WHERE o.department='${department}' AND isApprovedByHead IS NOT NULL AND isApprovedByHead != '' AND isApprovedByHead != '0' AND DATEDIFF(day, off_to, '${tday}') <= 0 AND  DATEDIFF(day, '${tday}', off_from) <= 0 `;
+    const dastConnection = await sql.promises.open(
+      process.env.DAST_DB_CONNECTION
+    );
+    const offsRes = await dastConnection.promises.query(todaysOffsQuery);
+    await dastConnection.promises.close();
 
     // let ipChain = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
     // ipChain = ipChain.split(':');
     // const ip = ipChain[ipChain.length - 1];
     // console.log(ip);
 
+    if (result.first.length < 1) {
+      successMessage.stats = {};
+      return res.status(status.success).send();
+    }
+
+    // Hazer ha
+    let presents = result.first[0]['Hazer'].split(',');
+    // Ghayeb ha
+    let absents = result.first[0]['Ghayeb'].split(',');
+    // Morkhasi ha
+    let personnelThatAreOffToday = [];
+
+    if (offsRes.first.length > 0)
+      offsRes.first.forEach((loopOffRecord) => {
+        personnelThatAreOffToday.push(loopOffRecord.requester);
+      });
+
+    // remove people that are off from the presents
+    presents = presents.filter(
+      (dudeNotOnVacation) =>
+        !personnelThatAreOffToday.includes(dudeNotOnVacation)
+    );
+
+    // remove people that are off from the absents
+    absents = absents.filter(
+      (dudeNotOnVacation) =>
+        !personnelThatAreOffToday.includes(dudeNotOnVacation)
+    );
+
+    result.first[0]['Hazer'] = presents.join(',');
+    result.first[0]['Ghayeb'] = absents.join(',');
+    result.first[0]['Morkhasi'] = personnelThatAreOffToday.join(',');
+
     successMessage.stats = result.first[0];
+    successMessage.offs = offsRes.first;
     return res.status(status.success).send(successMessage);
   } catch (error) {
+    console.log(error);
     if (error.message) return catchError(error.message, 'error', res);
     return catchError(errMessages.statsFetchFailed, 'error', res);
   }
 };
+
+const p2e = (s) => s.replace(/[۰-۹]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d));
 
 /**
  * Fetch daysOff records from users department
@@ -223,7 +446,7 @@ const fetchDaysOff = async (req, res) => {
   n.Acp_Fami as Acp_Fami,
   n.NID as NID,
   n.ShRank as ShRank,
-  n.Department as Department,
+  o.department as Department,
   n.IsSoldier as IsSoldier,
   o.requester as requester,
   o.successor as successor,
@@ -235,7 +458,8 @@ const fetchDaysOff = async (req, res) => {
   o.spec_loc as spec_loc,
   o.creator as creator,
   o.isApprovedByHead as isApprovedByHead,
-  o.isApprovedByHR as isApprovedByHR
+  o.isApprovedByHR as isApprovedByHR,
+  o.isApprovedByAdmin as isApprovedByAdmin
   from Offs o inner join NameList n on o.requester = n.PerNo`;
   let daysOffCountQuery = `select count(*) from Offs o inner join NameList n on o.requester = n.PerNo`;
   let queryHasWhere = false;
@@ -320,7 +544,6 @@ const fetchDaysOff = async (req, res) => {
   try {
     const connection = await sql.promises.open(process.env.DAST_DB_CONNECTION);
     const results = await connection.promises.query(query);
-    // console.log('!!!!!!!!!!!!!!!!!!!!!!!', results.first);
     const dataCount = await connection.promises.query(daysOffCountQuery);
     await connection.promises.close();
 
@@ -437,8 +660,10 @@ const fetchThisUserRoles = async (id, res) => {
 };
 
 module.exports = {
+  approveStats,
   register,
   setDaysOff,
   fetchDaysOff,
   fetchTodaysStats,
+  approveADayOff,
 };

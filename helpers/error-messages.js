@@ -40,12 +40,13 @@ const errMessages = {
   personWithPerNo: 'فرد با شماره پرسنلی ',
   excelImportFailedAtSomePoint: 'ورود اطلاعات از فایل اکسل با مشکل مواجه شد',
   notAuthorized: 'عدم وجود مجوز',
-  // youAreNotInTheSameDep: 'شما تنها مجاز به ثبت مرخصی برای افراد قسمت خود هستید',
   dayOffInsertFailed: 'ثبت مرخصی با خطا مواجه شد',
   daysOffFetchFailed: 'واکشی مرخصی‌ها با خطا مواجه شد',
   statsInsertFailed: 'درج آمار روزانه با مشکل مواجه شد',
   statsAlreadyInserted: 'آمار امروز برای این قسمت یکبار ثبت شده است',
   statsFetchFailed: 'خواندن اطلاعات آمار با خطا مواجه شد',
+  approveFailed: 'تایید آمار روزانه با خطا مواجه شد',
+  alreadyApproved: 'قبلا تایید شده است',
 };
 
 module.exports = { errMessages };
