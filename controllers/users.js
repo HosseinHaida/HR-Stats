@@ -14,6 +14,7 @@ var sql = require('msnodesqlv8');
 
 const multer = require('multer');
 const { upload } = require('./profilePhotoUpload');
+const { signatureUpload } = require('./signatureUpload');
 
 // const multer = require("multer");
 // const { upload } = require("./usersPhotoUpload");
@@ -36,7 +37,7 @@ const siginUser = async (req, res) => {
   }
   try {
     // Find user in DB
-    const thisUser = await fetchThisUser(userID, res);
+    const thisUser = await fetchThisUser(userID);
 
     if (!thisUser) return catchError(errMessages.userNotFound, 'bad', res);
 
@@ -178,7 +179,7 @@ const insertUser = async (req, res) => {
   const { NationalID, PerNo } = req.user;
   const id = PerNo ? PerNo : NationalID;
   try {
-    const thisUser = await fetchThisUser(id, res);
+    const thisUser = await fetchThisUser(id);
     if (thisUser.Department !== process.env.HR_DEPARTMENT_ID)
       return catchError(errMessages.notAuthorizedToInsertUser, 'error', res);
   } catch (error) {
@@ -324,43 +325,30 @@ const fetchUsers = async (req, res) => {
     // Query to fetch people from DB
     let query =
       'select Users.Name, Users.Family, Users.Father, Users.NationalID, Users.Signature, Users.SuccessorSignature, Users.Rank, Users.Department, Users.IsSoldier, Users.PerNo, Users.Photo, Auth.Role, Auth.DepartmentID as AuthDepartmentID from Auth inner join Users on Auth.UserID=Users.PerNo';
-    // Query for number of people
-    let usersCountQuery = `select count(*) from Users`;
 
     let queryHasWhere = false;
 
     if (!isEmpty(search_text)) {
       query += ' where(';
-      usersCountQuery += ' where(';
       queryHasWhere = true;
       const where = (column) => ` ${column} LIKE N'%${search_text}%' or`;
       const whereWithoutOr = (column) => ` ${column} LIKE N'%${search_text}%')`;
       // Change query to fetch users based on search_text
       query += where('Name');
-      usersCountQuery += where('Name');
       query += where('Family');
-      usersCountQuery += where('Family');
       query += where('PerNo');
-      usersCountQuery += where('PerNo');
       query += whereWithoutOr('NationalID');
-      usersCountQuery += whereWithoutOr('NationalID');
     }
 
     if (!isEmpty(department)) {
       if (queryHasWhere) {
         query += ` and Department = '${department}'`;
-        usersCountQuery += ` and Department = '${department}'`;
       } else {
         query += ` where Department = '${department}'`;
-        usersCountQuery += ` where Department = '${department}'`;
       }
     }
 
     const connection = await sql.promises.open(process.env.STATS_DB_CONNECTION);
-    const dataCount = await connection.promises.query(usersCountQuery);
-
-    // Calculate number of users and pages
-    const totalCount = Number(dataCount.first[0]['']);
 
     // Actually query the DB for users
     const data = await connection.promises.query(query);
@@ -370,7 +358,6 @@ const fetchUsers = async (req, res) => {
 
     // Send response
     successMessage.users = users;
-    successMessage.total = totalCount;
     return res.status(status.success).send(successMessage);
   } catch (error) {
     console.log(error);
@@ -387,19 +374,6 @@ const fetchUsers = async (req, res) => {
 const uploadProfilePhoto = async (req, res) => {
   const { NationalID, PerNo } = req.user;
   const id = PerNo ? PerNo : NationalID;
-  // let thisUser = null;
-  // try {
-  //   thisUser = await fetchThisUser(id, res);
-  // if (thisUser.Department !== process.env.HR_DEPARTMENT_ID)
-  //   return catchError(
-  //     errMessages.notAuthorizedToInsertPersonnel,
-  //     'error',
-  //     res
-  //   );
-  // } catch (error) {
-  // return catchError(errMessages.couldNotFetchUser, 'error', res);
-  // }
-  // Actually do the upload
   upload(req, res, async (err) => {
     if (err instanceof multer.MulterError) {
       return catchError(errMessages.uploadFailed, 'error', res);
@@ -442,11 +416,97 @@ const uploadProfilePhoto = async (req, res) => {
 };
 
 /**
+ * Upload user signature photo
+ * @param {object} req
+ * @param {object} res
+ * @returns {object} success message
+ */
+const uploadSignature = async (req, res) => {
+  const { NationalID, PerNo } = req.user;
+  const id = PerNo ? PerNo : NationalID;
+  signatureUpload(req, res, async (err) => {
+    if (err instanceof multer.MulterError) {
+      return catchError(errMessages.uploadFailed, 'error', res);
+    } else if (err) {
+      return catchError(errMessages.errWhileUpload, 'error', res);
+    }
+    // Everything went fine with multer and uploading
+    const photoName = req.photo_name;
+    if (!photoName) {
+      return catchError(errMessages.failedSavingPhoto, 'error', res);
+    }
+    try {
+      const photoPath =
+        process.env.SERVER_URL +
+        ':' +
+        process.env.PORT +
+        '/' +
+        process.env.UPLOAD_DIR_SIGNATURES +
+        photoName;
+
+      let query = `UPDATE Users SET Signature='${photoPath}' WHERE PerNo='${id}'`;
+      const connection = await sql.promises.open(
+        process.env.STATS_DB_CONNECTION
+      );
+      await connection.promises.query(query);
+      await connection.promises.close();
+
+      successMessage.signature_path = photoPath;
+      return res.status(status.success).send(successMessage);
+    } catch (error) {
+      if (error.message)
+        return catchError(
+          error.message.substring(error.message.lastIndexOf(']') + 1),
+          'error',
+          res
+        );
+      else return catchError(errMessages.operationFailed, 'error', res);
+    }
+  });
+};
+
+/**
+ * Update user password
+ * @param {object} req
+ * @param {object} res
+ * @returns {object} success message
+ */
+const updatePassword = async (req, res) => {
+  const { NationalID, PerNo } = req.user;
+  const id = PerNo ? PerNo : NationalID;
+  const { oldPass, newPass } = req.body;
+  try {
+    const thisUser = await fetchThisUser(id);
+
+    if (isEmpty(oldPass) || isEmpty(newPass)) {
+      return catchError(errMessages.emptyFields, 'bad', res);
+    }
+
+    if (!thisUser) return catchError(errMessages.userNotFound, 'bad', res);
+
+    if (!comparePassword(thisUser.PasswordHash, oldPass))
+      return catchError(errMessages.invalidPassword, 'bad', res);
+
+    const newHashedPassword = hashString(newPass);
+    console.log(oldPass, newPass);
+    const query = `update Users set PasswordHash = N'${newHashedPassword}' where PerNo = N'${id}' or NationalID = N'${id}'`;
+    const connection = await sql.promises.open(process.env.STATS_DB_CONNECTION);
+    const data = await connection.promises.query(query);
+    await connection.promises.close();
+
+    return res.status(status.success).send();
+  } catch (error) {
+    if (error.message) return catchError(error.message, 'error', res);
+    else return catchError(errMessages.updatePassFailed, 'error', res);
+  }
+};
+
+/**
  * Fetch user from DB
  * @param {integer} id
  * @returns {object} user
  */
-const fetchThisUser = async (id, res) => {
+const fetchThisUser = async (id) => {
   const query = `select * from Users where PerNo = N'${id}' or NationalID = N'${id}'`;
   const connection = await sql.promises.open(process.env.STATS_DB_CONNECTION);
   const data = await connection.promises.query(query);
@@ -460,7 +520,7 @@ const fetchThisUser = async (id, res) => {
  * @param {integer} id
  * @returns {object} array of permissions
  */
-const fetchThisUserRoles = async (id, res) => {
+const fetchThisUserRoles = async (id) => {
   const query = `select * from Auth inner join Departments ON Auth.DepartmentID=Departments.ID where Auth.UserID = N'${id}'`;
   const connection = await sql.promises.open(process.env.STATS_DB_CONNECTION);
   const data = await connection.promises.query(query);
@@ -504,4 +564,6 @@ module.exports = {
   insertUser,
   deleteAuth,
   uploadProfilePhoto,
+  uploadSignature,
+  updatePassword,
 };

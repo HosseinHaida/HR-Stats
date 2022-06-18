@@ -27,10 +27,13 @@ const errMessages = {
   userHasNoAuth: 'عدم وجود مجوز ثبت آمار',
   userIsNotAuthedForThisDep: 'عدم وجود مجوز برای ثبت آمار قسمت مربوطه',
   notAuthorizedToChangeDep: 'شما مجاز به تغییر قسمت شخص نیستید',
+  notAuthorizedToChangeShobe: 'شما مجاز به تغییر شعبه شخص نیستید',
   canOnlyUnsetPersonDep: 'شما تنها مجاز به کسر پرسنل از قسمت خود هستید',
   noAuthFound: 'مجوزی برای شما یافت نشد، با ادمین تماس بگیرید',
   noAuthInDepToChangeDep: 'شما در این قسمت مجوز تغییر قسمت پرسنل را ندارید',
+  noAuthInDepToChangeShobe: 'شما در این قسمت مجوز تغییر شعبه پرسنل را ندارید',
   couldNotUpdatePersonDep: 'عملیات تغییر قسمت با خطا مواجه شد',
+  couldNotUpdatePersonShobe: 'عملیات تغییر شعبه با خطا مواجه شد',
   couldNotFetchPerson: 'استخراج ناموفق پرسنل',
   personNotFound: 'پرسنل یافت نشد',
   metaFetchForDastoorFailed: 'استخراج اطلاعات ماده دستور با خطا مواجه شد.',
@@ -47,6 +50,10 @@ const errMessages = {
   statsFetchFailed: 'خواندن اطلاعات آمار با خطا مواجه شد',
   approveFailed: 'تایید آمار روزانه با خطا مواجه شد',
   alreadyApproved: 'قبلا تایید شده است',
+  fetchingHolidaysFailed: 'استخراج روزهای تعطیل با خطا مواجه شد',
+  missionInsertFailed: 'ایجاد ماموریت با خطا مواجه شد',
+  agentInsertionFailed: 'ثبت مامور با خطا مواجه شد',
+  updatePassFailed: 'فرایند ویرایش رمز عبور با خطا مواجه شد',
 };
 
 module.exports = { errMessages };

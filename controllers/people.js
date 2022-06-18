@@ -25,7 +25,7 @@ const uploadExcel = async (req, res) => {
   const { NationalID, PerNo } = req.user;
   const id = PerNo ? PerNo : NationalID;
   try {
-    const thisUser = await fetchThisUser(id, res);
+    const thisUser = await fetchThisUser(id);
     if (thisUser.Department !== process.env.HR_DEPARTMENT_ID)
       return catchError(
         errMessages.notAuthorizedToInsertPersonnel,
@@ -133,7 +133,7 @@ const changeDepartment = async (req, res) => {
   let thisPerson;
   // Try fetching person from DB
   try {
-    thisPerson = await fetchThisPerson(perNo, res);
+    thisPerson = await fetchThisPerson(perNo);
   } catch (err) {
     return catchError(errMessages.couldNotFetchPerson, 'error', res);
   }
@@ -143,7 +143,7 @@ const changeDepartment = async (req, res) => {
   let thisUser;
   // Try fetching user from DB
   try {
-    thisUser = await fetchThisUser(id, res);
+    thisUser = await fetchThisUser(id);
   } catch (error) {
     return catchError(errMessages.couldNotFetchUser, 'error', res);
   }
@@ -227,6 +227,106 @@ const changeDepartment = async (req, res) => {
 };
 
 /**
+ * Change Shobe for a person
+ * @param {object} req
+ * @param {object} res
+ * @returns {object} return success message
+ */
+const changeShobe = async (req, res) => {
+  const { NationalID, PerNo } = req.user;
+  const id = PerNo ? PerNo : NationalID;
+  const { shobe, perNo } = req.body;
+
+  let thisPerson;
+  // Try fetching person from DB
+  try {
+    thisPerson = await fetchThisPerson(perNo);
+  } catch (err) {
+    return catchError(errMessages.couldNotFetchPerson, 'error', res);
+  }
+  if (!thisPerson)
+    return catchError(errMessages.personNotFound, 'notfound', res);
+
+  let thisUser;
+  // Try fetching user from DB
+  try {
+    thisUser = await fetchThisUser(id);
+  } catch (error) {
+    return catchError(errMessages.couldNotFetchUser, 'error', res);
+  }
+  if (!thisPerson) return catchError(errMessages.userNotFound, 'notfound', res);
+
+  const thisUserRoles = await fetchThisUserRoles(id);
+  let authedDepartments = [];
+
+  thisUserRoles.forEach((loopPermission) => {
+    authedDepartments.push({
+      label: loopPermission.Label,
+      value: loopPermission.DepartmentID,
+      role: loopPermission.Role,
+    });
+  });
+
+  // If user and person are not in the same department
+  if (thisPerson.Department !== thisUser.Department) {
+    // Check if user is not in HR
+    if (thisUser.Department !== process.env.HR_DEPARTMENT_ID) {
+      return catchError(errMessages.notAuthorizedToChangeDep, 'error', res);
+    } else {
+      let isPermitted = false;
+      // Check if no auth found at all
+      if (authedDepartments.length < 1)
+        return catchError(errMessages.noAuthFound, 'error', res);
+      // Check if user has the role in HR
+      authedDepartments.forEach((loopAuthDep) => {
+        if (loopAuthDep.value === process.env.HR_DEPARTMENT_ID) {
+          if (
+            loopAuthDep.role === 'can_do_all' ||
+            loopAuthDep.role === 'head' ||
+            loopAuthDep.role === 'succ' ||
+            loopAuthDep.role === 'operator'
+          ) {
+            isPermitted = true;
+          }
+        }
+      });
+      if (!isPermitted)
+        return catchError(errMessages.notAuthorizedToChangeShobe, 'bad', res);
+    }
+  } else {
+    // If user is not in HR
+    // Check if user has minimum auth in the department
+    let isPermitted = false;
+    authedDepartments.forEach((loopAuthDep) => {
+      if (loopAuthDep.value === thisPerson.Department) {
+        if (
+          loopAuthDep.role === 'can_do_all' ||
+          loopAuthDep.role === 'head' ||
+          loopAuthDep.role === 'succ' ||
+          loopAuthDep.role === 'operator'
+        ) {
+          isPermitted = true;
+        }
+      }
+    });
+    if (!isPermitted)
+      return catchError(errMessages.noAuthInDepToChangeShobe, 'bad', res);
+  }
+
+  // Actually update the DB and set or unset person department
+  try {
+    const query = `UPDATE NameList SET Shobe = N'${shobe}' WHERE PerNo = '${perNo}' or NID = '${perNo}'`;
+    const connection = await sql.promises.open(process.env.DAST_DB_CONNECTION);
+    await connection.promises.query(query);
+    await connection.promises.close();
+
+    return res.status(status.success).send();
+  } catch (err) {
+    return catchError(errMessages.couldNotUpdatePersonShobe, 'error', res);
+  }
+};
+
+/**
  * Insert new person
  * @param {object} req
  * @param {object} res
@@ -236,7 +336,7 @@ const insertPerson = async (req, res) => {
   const { NationalID, PerNo } = req.user;
   const id = PerNo ? PerNo : NationalID;
   try {
-    const thisUser = await fetchThisUser(id, res);
+    const thisUser = await fetchThisUser(id);
     if (thisUser.Department !== process.env.HR_DEPARTMENT_ID)
       return catchError(
         errMessages.notAuthorizedToInsertPersonnel,
@@ -303,7 +403,7 @@ const fetchPeople = async (req, res) => {
 
   try {
     // Query to fetch people from DB
-    let query = `select PerNo as PerNo, ShRank as Rank, Acp_Name as Name, Acp_Fami as Family, NID as NationalID, Department as Department, IsSoldier as IsSoldier from NameList`;
+    let query = `select PerNo as PerNo, ShRank as Rank, Acp_Name as Name, Acp_Fami as Family, NID as NationalID, Shobe as Shobe, Department as Department, IsSoldier as IsSoldier from NameList`;
     // Query for number of people
     let peopleCountQuery = `select count(*) from NameList`;
     let queryHasWhere = false;
@@ -366,31 +466,39 @@ const fetchPeople = async (req, res) => {
       let tday = String(p2e(irDate));
       tday = tday.replace('/', '-').replace('/', '-');
       // Fetch records from Offs table for today
-      // We know already that the ${departments} is a single department now!
+      // We already know that the ${departments} is a single department now!
       const todaysOffsQuery = `SELECT * FROM Offs o inner join NameList n on o.requester = n.PerNo WHERE o.department='${departments}' AND isApprovedByHead IS NOT NULL AND isApprovedByHead != '' AND isApprovedByHead != '0' AND DATEDIFF(day, off_to, '${tday}') <= 0 AND  DATEDIFF(day, '${tday}', off_from) <= 0 `;
+      const todaysMissionsQuery = `SELECT * FROM Missions m inner join NameList n on m.person_id = n.PerNo WHERE n.department='${departments}' AND is_approved_by_head IS NOT NULL AND is_approved_by_head != '' AND is_approved_by_head != '0' AND DATEDIFF(day, end_date, '${tday}') <= 0 AND  DATEDIFF(day, '${tday}', start_date) <= 0 `;
+      const todaysAgentsQuery = `SELECT * FROM Agents a inner join NameList n on a.person_id = n.PerNo WHERE n.department='${departments}' AND is_approved_by_head IS NOT NULL AND is_approved_by_head != '' AND is_approved_by_head != '0' AND DATEDIFF(day, end_date, '${tday}') <= 0 AND  DATEDIFF(day, '${tday}', start_date) <= 0 `;
+
       const dastConnection = await sql.promises.open(
         process.env.DAST_DB_CONNECTION
       );
       offsRes = await dastConnection.promises.query(todaysOffsQuery);
+      missionsRes = await dastConnection.promises.query(todaysMissionsQuery);
+      agentsRes = await dastConnection.promises.query(todaysAgentsQuery);
       await dastConnection.promises.close();
 
-      // Alter the query if there are people on vaca today
+      // Alter the query if there are people [on vaca or on a mission or sent as agents] today
       // and noOffs is set to true
-      if (nooffs === 'true' && offsRes.first.length > 0) {
-        offsRes.first.forEach((loopOffPerson) => {
-          peopleOnVaca.push(loopOffPerson.requester);
-        });
+      if (nooffs === 'true') {
+        // If some people are off today
+        if (offsRes.first.length > 0) {
+          offsRes.first.forEach((loopOffPerson) => {
+            peopleOnVaca.push(loopOffPerson.requester);
+          });
 
-        const parsedPeopleOnVaca = peopleOnVaca.join("','");
+          const parsedPeopleOnVaca = peopleOnVaca.join("','");
 
-        if (queryHasWhere) {
-          query += ` and PerNo not in ('${parsedPeopleOnVaca}')`;
-          peopleCountQuery += ` and PerNo not in ('${parsedPeopleOnVaca}')`;
-        } else {
-          query += ` where PerNo not in ('${parsedPeopleOnVaca}')`;
-          peopleCountQuery += ` where PerNo not in ('${parsedPeopleOnVaca}')`;
-          queryHasWhere = true;
+          if (queryHasWhere) {
+            query += ` and PerNo not in ('${parsedPeopleOnVaca}')`;
+          } else {
+            query += ` where PerNo not in ('${parsedPeopleOnVaca}')`;
+            queryHasWhere = true;
+          }
         }
+        // If some people are in a mission today
+        // If some people are sent as agents today
       }
     }
 
@@ -398,10 +506,8 @@ const fetchPeople = async (req, res) => {
     if (!isEmpty(search_text)) {
       if (queryHasWhere) {
         query += ' and(';
-        peopleCountQuery += ' and(';
       } else {
         query += ' where(';
-        peopleCountQuery += ' where(';
         queryHasWhere = true;
       }
 
@@ -410,20 +516,12 @@ const fetchPeople = async (req, res) => {
 
       // Change query to fetch people based on search_text
       query += where('Acp_Name');
-      peopleCountQuery += where('Acp_Name');
       query += where('Acp_Fami');
-      peopleCountQuery += where('Acp_Fami');
       query += where('PerNo');
-      peopleCountQuery += where('PerNo');
       query += whereWithoutOr('NID');
-      peopleCountQuery += whereWithoutOr('NID');
     }
 
     const connection = await sql.promises.open(process.env.DAST_DB_CONNECTION);
-    const dataCount = await connection.promises.query(peopleCountQuery);
-
-    // Calculate number of people and pages
-    const totalCount = Number(dataCount.first[0]['']);
 
     // Actually query the DB for people
     const data = await connection.promises.query(query);
@@ -432,7 +530,6 @@ const fetchPeople = async (req, res) => {
 
     // Send response
     successMessage.people = people;
-    successMessage.total = totalCount;
     successMessage.offs = offsRes ? offsRes.first : [];
 
     return res.status(status.success).send(successMessage);
@@ -451,7 +548,7 @@ const findPerson = async (req, res) => {
 
   const thisUserRoles = await fetchThisUserRoles(perNo);
   const thisUser = await fetchThisUser(perNo);
-  const result = await fetchThisPerson(id, res);
+  const result = await fetchThisPerson(id);
 
   let permittedDepartments = [];
 
@@ -477,7 +574,7 @@ const findPerson = async (req, res) => {
  * @param {integer} id
  * @returns {object} user
  */
-const fetchThisUser = async (id, res) => {
+const fetchThisUser = async (id) => {
   const query = `select * from Users where PerNo = N'${id}' or NationalID = N'${id}'`;
   const connection = await sql.promises.open(process.env.STATS_DB_CONNECTION);
   const data = await connection.promises.query(query);
@@ -491,7 +588,7 @@ const fetchThisUser = async (id, res) => {
  * @param {integer} id
  * @returns {object} user
  */
-const fetchThisPerson = async (id, res) => {
+const fetchThisPerson = async (id) => {
   const query = `select * from NameList where PerNo = N'${id}' or NID = N'${id}'`;
   const connection = await sql.promises.open(process.env.DAST_DB_CONNECTION);
   const data = await connection.promises.query(query);
@@ -505,7 +602,7 @@ const fetchThisPerson = async (id, res) => {
  * @param {integer} id
  * @returns {object} array of permissions
  */
-const fetchThisUserRoles = async (id, res) => {
+const fetchThisUserRoles = async (id) => {
   const query = `select * from Auth inner join Departments ON Auth.DepartmentID=Departments.ID where Auth.UserID = N'${id}'`;
   const connection = await sql.promises.open(process.env.STATS_DB_CONNECTION);
   const data = await connection.promises.query(query);
@@ -520,4 +617,5 @@ module.exports = {
   findPerson,
   insertPerson,
   changeDepartment,
+  changeShobe,
 };
